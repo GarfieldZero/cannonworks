@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "cannonworks:block/cannon" },
+    "facing=south": { "model": "cannonworks:block/cannon" },
+    "facing=west": { "model": "cannonworks:block/cannon" },
+    "facing=east": { "model": "cannonworks:block/cannon" }
+  }
+}

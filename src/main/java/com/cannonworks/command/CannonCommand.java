@@ -8,6 +8,7 @@ import java.util.function.Function;
 import com.cannonworks.CannonWorks;
 import com.cannonworks.ballistics.Ballistics;
 import com.cannonworks.ballistics.Trajectory;
+import com.cannonworks.block.CannonBlockEntity;
 import com.cannonworks.entity.ShellManager;
 import com.cannonworks.integration.WaystoneTargets;
 import com.cannonworks.payload.CannonPayload;
@@ -23,9 +24,14 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.blocks.BlockStateArgument;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
+import net.minecraft.commands.arguments.item.ItemArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -64,6 +70,7 @@ public final class CannonCommand {
                                 .executes(CannonCommand::teleportTo)))
                 .then(Commands.literal("debug")
                         .executes(CannonCommand::debugFlights))
+                .then(blockDebugNode(event.getBuildContext()))
                 .then(testfireNode(event.getBuildContext())));
     }
 
@@ -91,6 +98,50 @@ public final class CannonCommand {
                                         .then(distanceBranch(context -> CannonPayload.filler(
                                                 BlockStateArgument.getBlock(context, "block").getState(),
                                                 IntegerArgumentType.getInteger(context, "count")))))));
+    }
+
+    /** 开发用：直接给方块装填 / 开火，用来做无头测试。 */
+    private static LiteralArgumentBuilder<CommandSourceStack> blockDebugNode(
+            net.minecraft.commands.CommandBuildContext buildContext) {
+        return Commands.literal("block")
+                .then(Commands.literal("fire")
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                .executes(CannonCommand::blockFire)))
+                .then(Commands.literal("load")
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                .then(Commands.argument("slot", IntegerArgumentType.integer(0, 1))
+                                        .then(Commands.argument("item", ItemArgument.item(buildContext))
+                                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
+                                                        .executes(CannonCommand::blockLoad))))));
+    }
+
+    private static int blockFire(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        BlockEntity blockEntity = source.getLevel().getBlockEntity(pos);
+        if (!(blockEntity instanceof CannonBlockEntity cannon)) {
+            source.sendFailure(Component.literal("那里不是大炮"));
+            return 0;
+        }
+        boolean fired = cannon.fire(null);
+        source.sendSuccess(() -> Component.literal(fired ? "已开火" : "开火失败（冷却中 / 没火药 / 装药为 0）"), false);
+        return fired ? 1 : 0;
+    }
+
+    private static int blockLoad(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        BlockEntity blockEntity = source.getLevel().getBlockEntity(pos);
+        if (!(blockEntity instanceof CannonBlockEntity cannon)) {
+            source.sendFailure(Component.literal("那里不是大炮"));
+            return 0;
+        }
+        int slot = IntegerArgumentType.getInteger(context, "slot");
+        int count = IntegerArgumentType.getInteger(context, "count");
+        ItemStack stack = new ItemStack(ItemArgument.getItem(context, "item").getItem(), count);
+        cannon.getInventory().setStackInSlot(slot, stack);
+        source.sendSuccess(() -> Component.literal("已放入 " + stack.getHoverName().getString() + " ×" + count), false);
+        return 1;
     }
 
     /** `<距离> [俯仰]` 这一段子树，被普通/石碑/缓冲/填充四种模式复用。 */

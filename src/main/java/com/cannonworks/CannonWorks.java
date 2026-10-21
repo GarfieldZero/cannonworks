@@ -1,9 +1,15 @@
 package com.cannonworks;
 
 import com.cannonworks.entity.ShellManager;
+import com.cannonworks.network.CannonNetwork;
+import com.cannonworks.registry.ModBlockEntities;
+import com.cannonworks.registry.ModBlocks;
 import com.cannonworks.registry.ModEntities;
+import com.cannonworks.registry.ModMenus;
 import com.mojang.logging.LogUtils;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
@@ -23,9 +29,13 @@ public final class CannonWorks {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public CannonWorks() {
-        // 模组事件总线（注册物品/方块/实体等用）
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         ModEntities.register(modBus);
+        ModBlocks.register(modBus);
+        ModBlockEntities.register(modBus);
+        ModMenus.register(modBus);
+        modBus.addListener(this::addCreativeTabItems);
+        CannonNetwork.register();
 
         // Forge 事件总线（游戏逻辑事件用）
         MinecraftForge.EVENT_BUS.register(this);
@@ -33,5 +43,11 @@ public final class CannonWorks {
         ShellManager.init();
 
         LOGGER.info("Cannon Works loaded (Waystones present: {})", ModList.get().isLoaded("waystones"));
+    }
+
+    private void addCreativeTabItems(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
+            event.accept(ModBlocks.CANNON_ITEM);
+        }
     }
 }
