@@ -3,23 +3,30 @@ package com.cannonworks.command;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 import com.cannonworks.CannonWorks;
 import com.cannonworks.ballistics.Ballistics;
 import com.cannonworks.ballistics.Trajectory;
 import com.cannonworks.entity.ShellManager;
 import com.cannonworks.integration.WaystoneTargets;
+import com.cannonworks.payload.CannonPayload;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.blocks.BlockStateArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -30,10 +37,12 @@ import net.minecraftforge.fml.common.Mod;
  * 开发期调试命令。
  *
  * <pre>
- * /cannon testfire &lt;距离&gt; [俯仰角]        朝你面朝的方向打，距离按格算
- * /cannon testfire at &lt;x&gt; &lt;y&gt; &lt;z&gt; [俯仰]  朝绝对坐标打
- * /cannon debug                           列出在飞的炮弹
- * /cannon waystones / nearest / tp &lt;名字&gt;  传送石碑联动
+ * /cannon testfire &lt;距离&gt; [俯仰]                     空包弹（只炸坑）
+ * /cannon testfire waystone &lt;距离&gt; [俯仰]            送一座传送石碑过去并激活
+ * /cannon testfire buffer hay|water &lt;距离&gt; [俯仰]   缓冲物：软着陆，不炸坑
+ * /cannon testfire filler &lt;方块&gt; &lt;数量&gt; &lt;距离&gt; [俯仰]  空投建材
+ * /cannon testfire at &lt;x&gt; &lt;y&gt; &lt;z&gt; [俯仰]           朝绝对坐标打
+ * /cannon debug                                      列出在飞的炮弹
  * </pre>
  */
 @Mod.EventBusSubscriber(modid = CannonWorks.MOD_ID)
@@ -55,26 +64,50 @@ public final class CannonCommand {
                                 .executes(CannonCommand::teleportTo)))
                 .then(Commands.literal("debug")
                         .executes(CannonCommand::debugFlights))
-                .then(Commands.literal("testfire")
-                        // 相对模式：朝面朝方向打 <距离> 格
-                        .then(Commands.argument("distance", DoubleArgumentType.doubleArg(4.0, Ballistics.MAX_RANGE))
-                                .executes(context -> fireRelative(context, 45.0))
-                                .then(Commands.argument("pitch",
-                                                DoubleArgumentType.doubleArg(Ballistics.MIN_PITCH, Ballistics.MAX_PITCH))
-                                        .executes(context -> fireRelative(context,
-                                                DoubleArgumentType.getDouble(context, "pitch")))))
-                        // 绝对模式：朝指定坐标打
-                        .then(Commands.literal("at")
-                                .then(Commands.argument("target", Vec3Argument.vec3())
-                                        .executes(context -> fireAt(context, 45.0))
-                                        .then(Commands.argument("pitch",
-                                                        DoubleArgumentType.doubleArg(Ballistics.MIN_PITCH, Ballistics.MAX_PITCH))
-                                                .executes(context -> fireAt(context,
-                                                        DoubleArgumentType.getDouble(context, "pitch"))))))));
+                .then(testfireNode(event.getBuildContext())));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> testfireNode(
+            net.minecraft.commands.CommandBuildContext buildContext) {
+        return Commands.literal("testfire")
+                .then(distanceBranch(context -> CannonPayload.NONE))
+                .then(Commands.literal("at")
+                        .then(Commands.argument("target", Vec3Argument.vec3())
+                                .executes(context -> fireAt(context, 45.0, CannonPayload.NONE))
+                                .then(pitchArgument()
+                                        .executes(context -> fireAt(context,
+                                                DoubleArgumentType.getDouble(context, "pitch"), CannonPayload.NONE)))))
+                .then(Commands.literal("waystone")
+                        .then(distanceBranch(context -> CannonPayload.waystone())))
+                .then(Commands.literal("buffer")
+                        .then(Commands.literal("hay")
+                                .then(distanceBranch(context -> CannonPayload.hay())))
+                        .then(Commands.literal("water")
+                                .then(distanceBranch(context -> CannonPayload.water()))))
+                .then(Commands.literal("filler")
+                        .then(Commands.argument("block", BlockStateArgument.block(buildContext))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 256))
+                                        .then(distanceBranch(context -> CannonPayload.filler(
+                                                BlockStateArgument.getBlock(context, "block").getState(),
+                                                IntegerArgumentType.getInteger(context, "count")))))));
+    }
+
+    /** `<距离> [俯仰]` 这一段子树，被普通/石碑/缓冲/填充四种模式复用。 */
+    private static ArgumentBuilder<CommandSourceStack, ?> distanceBranch(
+            Function<CommandContext<CommandSourceStack>, CannonPayload> payloadFactory) {
+        return Commands.argument("distance", DoubleArgumentType.doubleArg(4.0, Ballistics.MAX_RANGE))
+                .executes(context -> fireRelative(context, 45.0, payloadFactory.apply(context)))
+                .then(pitchArgument()
+                        .executes(context -> fireRelative(context,
+                                DoubleArgumentType.getDouble(context, "pitch"), payloadFactory.apply(context))));
+    }
+
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, Double> pitchArgument() {
+        return Commands.argument("pitch", DoubleArgumentType.doubleArg(Ballistics.MIN_PITCH, Ballistics.MAX_PITCH));
     }
 
     /** 朝执行者面朝的水平方向打指定距离。 */
-    private static int fireRelative(CommandContext<CommandSourceStack> context, double pitchDeg) {
+    private static int fireRelative(CommandContext<CommandSourceStack> context, double pitchDeg, CannonPayload payload) {
         CommandSourceStack source = context.getSource();
         double distance = DoubleArgumentType.getDouble(context, "distance");
         Vec3 origin = source.getPosition().add(0.0, 1.5, 0.0);
@@ -84,18 +117,19 @@ public final class CannonCommand {
             horizontal = new Vec3(0.0, 0.0, 1.0);
         }
         Vec3 target = origin.add(horizontal.normalize().scale(distance));
-        return launch(source, origin, target, pitchDeg);
+        return launch(source, origin, target, pitchDeg, payload);
     }
 
     /** 朝绝对坐标打。 */
-    private static int fireAt(CommandContext<CommandSourceStack> context, double pitchDeg) {
+    private static int fireAt(CommandContext<CommandSourceStack> context, double pitchDeg, CannonPayload payload) {
         CommandSourceStack source = context.getSource();
         Vec3 target = Vec3Argument.getVec3(context, "target");
         Vec3 origin = source.getPosition().add(0.0, 1.5, 0.0);
-        return launch(source, origin, target, pitchDeg);
+        return launch(source, origin, target, pitchDeg, payload);
     }
 
-    private static int launch(CommandSourceStack source, Vec3 origin, Vec3 target, double pitchDeg) {
+    private static int launch(CommandSourceStack source, Vec3 origin, Vec3 target, double pitchDeg,
+                              CannonPayload payload) {
         Trajectory trajectory = Ballistics.create(origin, target, pitchDeg);
         if (trajectory.range() > Ballistics.MAX_RANGE) {
             source.sendFailure(Component.literal(String.format(
@@ -103,11 +137,12 @@ public final class CannonCommand {
             return 0;
         }
         UUID owner = source.getEntity() instanceof ServerPlayer player ? player.getUUID() : null;
-        ShellManager.launch(source.getLevel(), trajectory, owner);
+        ShellManager.launch(source.getLevel(), trajectory, owner, payload);
 
         source.sendSuccess(() -> Component.literal(String.format(
-                "试射：射程 %.1f 格，俯仰 %.0f°，顶点 %.0f 格，飞行 %.1f 秒",
-                trajectory.range(), pitchDeg, trajectory.apex(), trajectory.flightTicks() / 20.0)), false);
+                "试射：射程 %.1f 格，俯仰 %.0f°，顶点 %.0f 格，飞行 %.1f 秒，负载[%s]",
+                trajectory.range(), pitchDeg, trajectory.apex(), trajectory.flightTicks() / 20.0,
+                payload.describe())), false);
         return 1;
     }
 
@@ -118,9 +153,10 @@ public final class CannonCommand {
         for (ShellManager.Flight flight : flights) {
             Vec3 at = flight.position();
             source.sendSuccess(() -> Component.literal(String.format(
-                    " - %s  %d/%d tick  @ %.0f/%.0f/%.0f  载体:%s",
+                    " - %s  %d/%d tick  @ %.0f/%.0f/%.0f  负载[%s]  载体:%s",
                     flight.id().toString().substring(0, 8), flight.age(), flight.trajectory().flightTicks(),
-                    at.x, at.y, at.z, flight.hasEntity() ? "有" : "无(区块未加载)")), false);
+                    at.x, at.y, at.z, flight.payload().describe(),
+                    flight.hasEntity() ? "有" : "无(区块未加载)")), false);
         }
         return Math.max(1, flights.size());
     }

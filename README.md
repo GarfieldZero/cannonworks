@@ -2,8 +2,9 @@
 
 Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑（Waystones）」联动。
 
-> 当前状态：**M0 弹道内核已跑通并实测**（400 格 / 949 格 / **10000 格**三档精确命中；顶点可达 2500 格；撞山就地拦截；全程 TPS 20）。
-> 下一步：M2 石碑落地闭环 → M1 炮体与装填。
+> 当前状态：**M2 负载系统已跑通**——传送石碑投送（含 Waystones 注册）、草垛/水桶软着陆、
+> 填充物空投建材，全部无头实测；M0 弹道内核已多档验证（400 / 949 / 10000 格）。
+> 下一步：M1 炮体与装填 GUI（把这些能力装进真正的炮里）。
 > 设计文档见 [`docs/design-v1.md`](docs/design-v1.md)。
 
 ## 玩法速览
@@ -109,13 +110,22 @@ E:\.minecraft\versions\剑与王国\mods\cannonworks-0.1.0.jar
 ### 4.4 可用的测试命令
 
 ```
-/cannon testfire <距离> [俯仰角]        # 朝你面朝的方向打，400 = 前方 400 格（默认 45°）
-/cannon testfire 10000 45                # 10km 战略射程，约 4 分半
-/cannon testfire at <x> <y> <z> [俯仰]   # 朝绝对坐标打
-/cannon debug                            # 列出在飞的炮弹（tick、坐标、载体是否还在）
-/cannon waystones                        # 列出你已激活的石碑
-/cannon nearest                          # 最近的一座
-/cannon tp <名字>                         # 强制传送
+/cannon testfire <距离> [俯仰角]                        空包弹（只炸坑）
+/cannon testfire waystone <距离> [俯仰角]               送一座传送石碑过去，落地自动为发射者激活
+/cannon testfire buffer hay <距离> [俯仰角]             缓冲物·草垛：软着陆，不炸坑
+/cannon testfire buffer water <距离> [俯仰角]           缓冲物·水桶：软着陆，水放在落点旁边
+/cannon testfire filler <方块> <数量> <距离> [俯仰角]   填充物：炸坑 + 空投建材
+/cannon testfire at <x> <y> <z> [俯仰角]                朝绝对坐标打
+/cannon debug                                           列出在飞的炮弹（tick、坐标、负载、载体状态）
+/cannon waystones / nearest / tp <名字>                  传送石碑联动
+```
+
+例子：
+
+```
+/cannon testfire waystone 800 45          # 800 格外落一座已激活的石碑，然后 /cannon tp <名字> 过去
+/cannon testfire filler minecraft:obsidian 64 500 30     # 空投 64 块黑曜石
+/cannon testfire buffer hay 300 20        # 给 300 格外的落点铺草垛，人/货物摔不坏
 ```
 
 > `400` 是**距离**，不是坐标。旧写法 `testfire 400 ~ ~` 里的 400 是绝对 X 坐标，

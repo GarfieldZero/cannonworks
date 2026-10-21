@@ -72,19 +72,42 @@ public final class ImpactEffects {
         return removed;
     }
 
-    /** 给落点找一个「安全支撑位」：从命中点往下找第一块实心方块，返回它上方一格。 */
-    public static BlockPos findSupport(ServerLevel level, Vec3 hit, int maxDrop) {
-        BlockPos pos = BlockPos.containing(hit);
-        for (int i = 0; i <= maxDrop; i++) {
-            BlockPos below = pos.below(i);
-            if (level.isOutsideBuildHeight(below)) {
-                break;
-            }
-            BlockState state = level.getBlockState(below);
-            if (!state.isAir() && state.getFluidState().isEmpty() && !state.canBeReplaced()) {
-                return below.above();
+    /**
+     * 给落点找一个「能站人」的支撑位：在命中点附近 7×7 的柱子里往下探，
+     * 取<b>上方有两格空气</b>且离命中点最近的那个面。
+     *
+     * <p>为什么不是简单的「往下找第一块实心」：炸出来的坑会有悬垂边，
+     * 那样选出来的位置头顶是实心的，石碑会被埋进墙里。</p>
+     *
+     * @return 支撑面上方的空气格；找不到返回 null
+     */
+    public static BlockPos findLanding(ServerLevel level, Vec3 hit, int maxDrop) {
+        BlockPos base = BlockPos.containing(hit);
+        BlockPos best = null;
+        double bestScore = Double.MAX_VALUE;
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int i = 0; i <= maxDrop; i++) {
+                    BlockPos pos = base.offset(dx, -i, dz);
+                    if (level.isOutsideBuildHeight(pos)) {
+                        break;
+                    }
+                    BlockState state = level.getBlockState(pos);
+                    if (state.isAir() || state.canBeReplaced()) {
+                        continue;
+                    }
+                    BlockPos landing = pos.above();
+                    if (level.isEmptyBlock(landing) && level.isEmptyBlock(landing.above())) {
+                        double score = base.distSqr(landing);
+                        if (score < bestScore) {
+                            bestScore = score;
+                            best = landing;
+                        }
+                    }
+                    break; // 这一列已经碰到地面了
+                }
             }
         }
-        return null;
+        return best;
     }
 }

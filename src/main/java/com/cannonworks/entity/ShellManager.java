@@ -2,7 +2,8 @@ package com.cannonworks.entity;
 
 import com.cannonworks.CannonWorks;
 import com.cannonworks.ballistics.Trajectory;
-import com.cannonworks.impact.ImpactEffects;
+import com.cannonworks.payload.CannonPayload;
+import com.cannonworks.payload.PayloadDelivery;
 import com.cannonworks.registry.ModEntities;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -48,7 +49,6 @@ public final class ShellManager {
     /** 半径 2 → 中心区块 tick 等级 31（entity ticking），周围一圈只加载不 tick。 */
     private static final int TICKET_RADIUS = 2;
     private static final int TICKET_TIMEOUT_TICKS = 60;
-    private static final double CRATER_RADIUS = 3.0;
 
     private static final TicketType<ChunkPos> SHELL_TICKET =
             TicketType.create("cannonworks:shell", Comparator.comparingLong(ChunkPos::toLong), TICKET_TIMEOUT_TICKS);
@@ -62,8 +62,8 @@ public final class ShellManager {
     }
 
     /** 发射一发炮弹，返回飞行 id；之后完全由本管理器驱动，调用方不需要再管实体。 */
-    public static UUID launch(ServerLevel level, Trajectory trajectory, @Nullable UUID owner) {
-        Flight flight = new Flight(UUID.randomUUID(), level, trajectory, owner);
+    public static UUID launch(ServerLevel level, Trajectory trajectory, @Nullable UUID owner, CannonPayload payload) {
+        Flight flight = new Flight(UUID.randomUUID(), level, trajectory, owner, payload);
         FLIGHTS.put(flight.id, flight);
         spawnEntity(flight, trajectory.sampleAtTick(0));
         return flight.id;
@@ -159,23 +159,23 @@ public final class ShellManager {
     private static void impact(Flight flight, Vec3 at, String reason) {
         Vec3 incoming = flight.trajectory.sampleAtTick(flight.age)
                 .subtract(flight.trajectory.sampleAtTick(Math.max(0, flight.age - 1)));
-        int removed = ImpactEffects.carveCrater(flight.level, at, incoming, CRATER_RADIUS);
+
+        ServerPlayer owner = flight.owner != null
+                ? flight.level.getServer().getPlayerList().getPlayer(flight.owner)
+                : null;
+        String summary = PayloadDelivery.onImpact(flight.level, at, incoming, flight.payload, owner);
 
         flight.level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, at.x, at.y, at.z, 1, 0.0, 0.0, 0.0, 0.0);
         flight.level.playSound(null, at.x, at.y, at.z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0f, 0.7f);
-        CannonWorks.LOGGER.info("Cannon shell impact at {} ({}) after {} ticks, range {} blocks, crater {} blocks",
+        CannonWorks.LOGGER.info("Cannon shell impact at {} ({}) after {} ticks, range {} blocks, payload [{}]: {}",
                 String.format("%.1f/%.1f/%.1f", at.x, at.y, at.z), reason, flight.age,
-                String.format("%.1f", flight.trajectory.range()), removed);
+                String.format("%.1f", flight.trajectory.range()), flight.payload.describe(), summary);
 
-        notifyOwner(flight, at, reason);
+        notifyOwner(owner, at, reason, summary);
         end(flight);
     }
 
-    private static void notifyOwner(Flight flight, Vec3 at, String reason) {
-        if (flight.owner == null) {
-            return;
-        }
-        ServerPlayer player = flight.level.getServer().getPlayerList().getPlayer(flight.owner);
+    private static void notifyOwner(@Nullable ServerPlayer player, Vec3 at, String reason, String summary) {
         if (player == null) {
             return;
         }
@@ -183,7 +183,7 @@ public final class ShellManager {
                 (int) Math.floor(at.x), (int) Math.floor(at.y), (int) Math.floor(at.z));
         boolean intercepted = reason.startsWith("hit");
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                intercepted ? "炮弹被地形拦截于 " + where + "（负载在此处落点）" : "炮弹已抵达 " + where));
+                (intercepted ? "炮弹被地形拦截于 " + where : "炮弹已抵达 " + where) + "：" + summary));
     }
 
     private static void end(Flight flight) {
@@ -208,14 +208,16 @@ public final class ShellManager {
         private final ServerLevel level;
         private final Trajectory trajectory;
         private final UUID owner;
+        private final CannonPayload payload;
         private int age;
         private CannonShellEntity entity;
 
-        private Flight(UUID id, ServerLevel level, Trajectory trajectory, UUID owner) {
+        private Flight(UUID id, ServerLevel level, Trajectory trajectory, UUID owner, CannonPayload payload) {
             this.id = id;
             this.level = level;
             this.trajectory = trajectory;
             this.owner = owner;
+            this.payload = payload;
         }
 
         public UUID id() {
@@ -228,6 +230,10 @@ public final class ShellManager {
 
         public Trajectory trajectory() {
             return trajectory;
+        }
+
+        public CannonPayload payload() {
+            return payload;
         }
 
         public boolean hasEntity() {
