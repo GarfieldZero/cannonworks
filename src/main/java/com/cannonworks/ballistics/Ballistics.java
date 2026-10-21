@@ -14,9 +14,12 @@ public final class Ballistics {
     public static final double MAX_PITCH = 85.0;
     /** 平均飞行速度（格/秒）。1000 格 ≈ 20 秒。 */
     public static final double BASE_SPEED = 50.0;
-    /** 顶点高度下限/上限（格）。 */
+    /** 顶点高度下限/上限（格）。上限给得足够高，才能打出 10km 级的战略射程：
+     *  45° 打 10000 格，真实抛物线顶点就是 2500 格。 */
     public static final double MIN_APEX = 10.0;
-    public static final double MAX_APEX = 300.0;
+    public static final double MAX_APEX = 3000.0;
+    /** 单发最大射程（格），超出直接拒绝，避免一发炮弹把服务器拖去生成半个世界。 */
+    public static final double MAX_RANGE = 12000.0;
     /** 高抛判定线（格）。 */
     public static final double HIGH_ARC_APEX = 120.0;
 
@@ -24,8 +27,11 @@ public final class Ballistics {
     }
 
     /**
-     * 顶点高度：沿用真实抛物线里 apex/range = tanθ/4 的比例，但夹在 [10, 300]。
-     * 低抛 15° 打 1000 格 → 67 格（贴地，容易被山挡）；高抛 60° → 300 格（被夹住，能越山）。
+     * 顶点高度：沿用真实抛物线里 apex/range = tanθ/4 的比例。
+     * 15° 打 10000 格 → 670 格；45° → 2500 格；超过 3000 才夹住。
+     *
+     * <p>MC 的方块只到 y=319，但<b>实体没有高度限制</b>：顶点超过 320 之后那一段既没有方块、
+     * 也就没有东西能挡住炮弹——这正是「高抛能越过一切地形」的物理来源。</p>
      */
     public static double apexFor(double range, double pitchDeg) {
         double clamped = Mth.clamp(pitchDeg, MIN_PITCH, MAX_PITCH);

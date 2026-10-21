@@ -47,6 +47,7 @@ public class CannonShellEntity extends Entity {
     private Trajectory trajectory;
     private int age;
     private boolean impacted;
+    private java.util.UUID ownerUuid;
 
     public CannonShellEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -68,6 +69,11 @@ public class CannonShellEntity extends Entity {
 
     public int getAge() {
         return age;
+    }
+
+    /** 记录发射者：命中/被拦截时给他发一条带坐标的提示。 */
+    public void setOwner(java.util.UUID ownerUuid) {
+        this.ownerUuid = ownerUuid;
     }
 
     @Override
@@ -141,8 +147,26 @@ public class CannonShellEntity extends Entity {
             CannonWorks.LOGGER.info("Cannon shell impact at {} ({}) after {} ticks, range {} blocks",
                     String.format("%.1f/%.1f/%.1f", at.x, at.y, at.z), reason, age,
                     String.format("%.1f", trajectory.range()));
+            notifyOwner(serverLevel, at, reason);
         }
         discard();
+    }
+
+    /** 提前告诉发射者落点：被山挡住时，他会收到「拦截于 X/Y/Z」而不是干等。 */
+    private void notifyOwner(ServerLevel serverLevel, Vec3 at, String reason) {
+        if (ownerUuid == null) {
+            return;
+        }
+        net.minecraft.server.level.ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(ownerUuid);
+        if (player == null) {
+            return;
+        }
+        String where = String.format("%d, %d, %d", (int) Math.floor(at.x), (int) Math.floor(at.y), (int) Math.floor(at.z));
+        boolean intercepted = reason.startsWith("hit");
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                intercepted
+                        ? "炮弹被地形拦截于 " + where + "（负载在此处落点）"
+                        : "炮弹已抵达 " + where));
     }
 
     @Override
@@ -179,6 +203,9 @@ public class CannonShellEntity extends Entity {
         }
         this.age = tag.getInt("Age");
         this.impacted = tag.getBoolean("Impacted");
+        if (tag.hasUUID("Owner")) {
+            this.ownerUuid = tag.getUUID("Owner");
+        }
     }
 
     @Override
@@ -198,5 +225,8 @@ public class CannonShellEntity extends Entity {
         }
         tag.putInt("Age", age);
         tag.putBoolean("Impacted", impacted);
+        if (ownerUuid != null) {
+            tag.putUUID("Owner", ownerUuid);
+        }
     }
 }

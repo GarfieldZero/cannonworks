@@ -74,7 +74,15 @@ public final class CannonCommand {
         Vec3 origin = source.getPosition().add(0.0, 1.5, 0.0);
 
         Trajectory trajectory = Ballistics.create(origin, target, pitchDeg);
+        if (trajectory.range() > Ballistics.MAX_RANGE) {
+            source.sendFailure(Component.literal(String.format(
+                    "射程 %.0f 格超出单发上限 %.0f 格", trajectory.range(), Ballistics.MAX_RANGE)));
+            return 0;
+        }
         CannonShellEntity shell = new CannonShellEntity(ModEntities.CANNON_SHELL.get(), level);
+        if (source.getEntity() instanceof ServerPlayer shooter) {
+            shell.setOwner(shooter.getUUID());
+        }
         shell.setTrajectory(trajectory);
         level.addFreshEntity(shell);
 
