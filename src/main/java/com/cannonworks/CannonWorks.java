@@ -1,7 +1,10 @@
 package com.cannonworks;
 
+import com.cannonworks.entity.ShellManager;
+import com.cannonworks.registry.ModEntities;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -21,9 +24,13 @@ public final class CannonWorks {
 
     public CannonWorks() {
         // 模组事件总线（注册物品/方块/实体等用）
-        FMLJavaModLoadingContext.get().getModEventBus();
+        IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        ModEntities.register(modBus);
+
         // Forge 事件总线（游戏逻辑事件用）
         MinecraftForge.EVENT_BUS.register(this);
+        // 炮弹由服务端 tick 统一推进，不依赖所在区块是否 entity-ticking
+        ShellManager.init();
 
         LOGGER.info("Cannon Works loaded (Waystones present: {})", ModList.get().isLoaded("waystones"));
     }
