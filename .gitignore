@@ -1,0 +1,33 @@
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+run-data
+
+# 本地工具链与缓存（不入库）
+.cache/
+.tools/
+
+# 日志
+*.log
+
+# Files from Forge MDK
+forge*changelog.txt
