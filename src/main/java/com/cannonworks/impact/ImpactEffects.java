@@ -81,12 +81,12 @@ public final class ImpactEffects {
      *
      * @return 支撑面上方的空气格；找不到返回 null
      */
-    public static BlockPos findLanding(ServerLevel level, Vec3 hit, int maxDrop) {
+    public static BlockPos findLanding(ServerLevel level, Vec3 hit, int radius, int maxDrop) {
         BlockPos base = BlockPos.containing(hit);
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
-        for (int dx = -3; dx <= 3; dx++) {
-            for (int dz = -3; dz <= 3; dz++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
                 for (int i = 0; i <= maxDrop; i++) {
                     BlockPos pos = base.offset(dx, -i, dz);
                     if (level.isOutsideBuildHeight(pos)) {

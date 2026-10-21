@@ -44,7 +44,7 @@ public final class PayloadDelivery {
 
     /** 缓冲物·草垛：不炸坑，落点正下方一格换成草垛。 */
     private static String hay(ServerLevel level, Vec3 at) {
-        BlockPos landing = ImpactEffects.findLanding(level, at, MAX_SUPPORT_DROP);
+        BlockPos landing = ImpactEffects.findLanding(level, at, 2, MAX_SUPPORT_DROP);
         if (landing == null) {
             return "草垛投送失败（找不到支撑面）";
         }
@@ -55,7 +55,7 @@ public final class PayloadDelivery {
 
     /** 缓冲物·水桶：不炸坑，水放在落点旁边（放正下方会被货物方块挤掉）。 */
     private static String water(ServerLevel level, Vec3 at, Vec3 incoming) {
-        BlockPos landing = ImpactEffects.findLanding(level, at, MAX_SUPPORT_DROP);
+        BlockPos landing = ImpactEffects.findLanding(level, at, 2, MAX_SUPPORT_DROP);
         if (landing == null) {
             return "水桶投送失败（找不到支撑面）";
         }
@@ -124,9 +124,11 @@ public final class PayloadDelivery {
         if (!ModList.get().isLoaded("waystones")) {
             return "弹坑 " + carved + " 格，但未安装传送石碑，负载丢失";
         }
-        BlockPos landing = ImpactEffects.findLanding(level, at, MAX_SUPPORT_DROP);
+        // 水面/悬崖落点要往下找得多一些：11×11 范围、最深 40 格（够到海底）
+        BlockPos landing = ImpactEffects.findLanding(level, at, 5, 40);
         if (landing == null) {
-            return "弹坑 " + carved + " 格，石碑投送失败（找不到支撑面）";
+            WaystoneDelivery.dropAsItem(level, at);
+            return "弹坑 " + carved + " 格，石碑立不起来（下方 40 格没有平面），已作为物品掉在落点";
         }
         boolean ok = WaystoneDelivery.deliver(level, landing, owner);
         String status;
