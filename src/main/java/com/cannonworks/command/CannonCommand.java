@@ -78,7 +78,8 @@ public final class CannonCommand {
                                         .executes(context -> fireAt(context,
                                                 DoubleArgumentType.getDouble(context, "pitch"), CannonPayload.NONE)))))
                 .then(Commands.literal("waystone")
-                        .then(distanceBranch(context -> CannonPayload.waystone())))
+                        // waystone <距离> [俯仰] [名字]
+                        .then(waystoneBranch()))
                 .then(Commands.literal("buffer")
                         .then(Commands.literal("hay")
                                 .then(distanceBranch(context -> CannonPayload.hay())))
@@ -100,6 +101,24 @@ public final class CannonCommand {
                 .then(pitchArgument()
                         .executes(context -> fireRelative(context,
                                 DoubleArgumentType.getDouble(context, "pitch"), payloadFactory.apply(context))));
+    }
+
+    /**
+     * 石碑专用：`<距离> [俯仰] [名字]`。
+     *
+     * <p>名字必须是<b>最后一个</b>参数（greedy），所以想命名时俯仰角不能省——
+     * 省了的话 Brigadier 没法区分「名字」和「俯仰角」。</p>
+     */
+    private static ArgumentBuilder<CommandSourceStack, ?> waystoneBranch() {
+        return Commands.argument("distance", DoubleArgumentType.doubleArg(4.0, Ballistics.MAX_RANGE))
+                .executes(context -> fireRelative(context, 45.0, CannonPayload.waystone()))
+                .then(pitchArgument()
+                        .executes(context -> fireRelative(context,
+                                DoubleArgumentType.getDouble(context, "pitch"), CannonPayload.waystone()))
+                        .then(Commands.argument("name", StringArgumentType.greedyString())
+                                .executes(context -> fireRelative(context,
+                                        DoubleArgumentType.getDouble(context, "pitch"),
+                                        CannonPayload.waystone(StringArgumentType.getString(context, "name"))))));
     }
 
     private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, Double> pitchArgument() {

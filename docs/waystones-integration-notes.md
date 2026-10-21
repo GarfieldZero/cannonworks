@@ -75,3 +75,19 @@ TeleportDestination resolveDestination(ServerLevel);   // 默认实现，算出�
 
 - 运行期必需：`balm >= 7.3.28`（本仓库用 7.3.44）
 - 本模组在 `mods.toml` 中声明：`waystones [14.0.0,) optional, ordering=AFTER`
+
+## 踩坑：激活之后必须手动同步
+
+`PlayerWaystoneManager.activateWaystone(player, waystone)` 只写**服务端**玩家数据并 fire `WaystoneActivatedEvent`，
+**不发同步包**。真正的同步在 `WaystoneBlock.use()`（玩家右键石碑）里，调用 `WaystoneSyncManager.sendActivatedWaystones(player)`。
+
+所以「代码激活」之后如果不补这一句，玩家客户端列表里看不到新石碑，必须亲自摸一下才出现。
+正确写法：
+
+```java
+PlayerWaystoneManager.activateWaystone(owner, waystone);
+WaystoneSyncManager.sendActivatedWaystones(owner);   // 关键
+```
+
+另外 `WaystonesAPI.placeWaystone` 只放置+注册，不会设置名字（玩家放的石碑显示为「未命名」），
+需要 `((IMutableWaystone) waystone).setName(name)` + `WaystoneManager.get(server).updateWaystone(waystone)`。

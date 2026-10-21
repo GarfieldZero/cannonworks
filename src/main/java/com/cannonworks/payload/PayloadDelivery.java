@@ -38,7 +38,7 @@ public final class PayloadDelivery {
             case BUFFER_HAY -> hay(level, at);
             case BUFFER_WATER -> water(level, at, incoming);
             case FILLER -> filler(level, at, incoming, payload);
-            case WAYSTONE -> waystone(level, at, incoming, owner);
+            case WAYSTONE -> waystone(level, at, incoming, owner, payload);
         };
     }
 
@@ -119,7 +119,8 @@ public final class PayloadDelivery {
     }
 
     /** 特殊负载：炸坑后把石碑立在坑底，并给发射者激活。 */
-    private static String waystone(ServerLevel level, Vec3 at, Vec3 incoming, @Nullable ServerPlayer owner) {
+    private static String waystone(ServerLevel level, Vec3 at, Vec3 incoming, @Nullable ServerPlayer owner,
+                                   CannonPayload payload) {
         int carved = ImpactEffects.carveCrater(level, at, incoming, CRATER_RADIUS);
         if (!ModList.get().isLoaded("waystones")) {
             return "弹坑 " + carved + " 格，但未安装传送石碑，负载丢失";
@@ -130,7 +131,8 @@ public final class PayloadDelivery {
             WaystoneDelivery.dropAsItem(level, at);
             return "弹坑 " + carved + " 格，石碑立不起来（下方 40 格没有平面），已作为物品掉在落点";
         }
-        boolean ok = WaystoneDelivery.deliver(level, landing, owner);
+        boolean ok = WaystoneDelivery.deliver(level, landing, owner, payload.customName());
+        String label = payload.customName() != null ? "「" + payload.customName() + "」" : "（默认名）";
         String status;
         if (!ok) {
             status = "放置失败";
@@ -139,7 +141,7 @@ public final class PayloadDelivery {
         } else {
             status = "已放置（无发射者，未激活）@ " + fmt(landing);
         }
-        return "弹坑 " + carved + " 格，传送石碑" + status;
+        return "弹坑 " + carved + " 格，传送石碑" + label + status;
     }
 
     private static String fmt(BlockPos pos) {

@@ -8,10 +8,15 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * <p>按设计文档，落点栏位是<b>互斥</b>的：缓冲物（软投送）和填充物（硬投送）只能二选一，
  * 传送石碑属于「特殊负载」，单独占一类。</p>
+ *
+ * @param customName 特殊负载的自定义名字（目前只有传送石碑用），null 表示用默认名
  */
-public record CannonPayload(Type type, @Nullable BlockState fillerState, int fillerCount) {
+public record CannonPayload(Type type, @Nullable BlockState fillerState, int fillerCount,
+                            @Nullable String customName) {
 
-    public static final CannonPayload NONE = new CannonPayload(Type.NONE, null, 0);
+    public static final CannonPayload NONE = new CannonPayload(Type.NONE, null, 0, null);
+
+    private static final int MAX_NAME_LENGTH = 32;
 
     public enum Type {
         /** 空：纯弹坑。 */
@@ -27,28 +32,51 @@ public record CannonPayload(Type type, @Nullable BlockState fillerState, int fil
     }
 
     public static CannonPayload waystone() {
-        return new CannonPayload(Type.WAYSTONE, null, 0);
+        return new CannonPayload(Type.WAYSTONE, null, 0, null);
+    }
+
+    public static CannonPayload waystone(@Nullable String name) {
+        return new CannonPayload(Type.WAYSTONE, null, 0, sanitize(name));
     }
 
     public static CannonPayload hay() {
-        return new CannonPayload(Type.BUFFER_HAY, null, 0);
+        return new CannonPayload(Type.BUFFER_HAY, null, 0, null);
     }
 
     public static CannonPayload water() {
-        return new CannonPayload(Type.BUFFER_WATER, null, 0);
+        return new CannonPayload(Type.BUFFER_WATER, null, 0, null);
     }
 
     public static CannonPayload filler(BlockState state, int count) {
-        return new CannonPayload(Type.FILLER, state, Math.max(1, count));
+        return new CannonPayload(Type.FILLER, state, Math.max(1, count), null);
     }
 
     public String describe() {
         return switch (type) {
             case NONE -> "空";
-            case WAYSTONE -> "传送石碑";
+            case WAYSTONE -> customName != null ? "传送石碑「" + customName + "」" : "传送石碑";
             case BUFFER_HAY -> "缓冲物·草垛";
             case BUFFER_WATER -> "缓冲物·水桶";
             case FILLER -> "填充物 " + fillerState.getBlock().getName().getString() + " ×" + fillerCount;
         };
+    }
+
+    /** 去掉控制字符和包裹的引号、裁掉首尾空白，空串当没填，最长 32 字。 */
+    @Nullable
+    private static String sanitize(@Nullable String name) {
+        if (name == null) {
+            return null;
+        }
+        String cleaned = name.trim();
+        if (cleaned.length() >= 2
+                && ((cleaned.startsWith("'") && cleaned.endsWith("'"))
+                || (cleaned.startsWith("\"") && cleaned.endsWith("\"")))) {
+            cleaned = cleaned.substring(1, cleaned.length() - 1);
+        }
+        cleaned = cleaned.replaceAll("\\p{Cntrl}", "").trim();
+        if (cleaned.isEmpty()) {
+            return null;
+        }
+        return cleaned.length() > MAX_NAME_LENGTH ? cleaned.substring(0, MAX_NAME_LENGTH) : cleaned;
     }
 }

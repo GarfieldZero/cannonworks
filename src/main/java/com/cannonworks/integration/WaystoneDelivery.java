@@ -27,9 +27,11 @@ public final class WaystoneDelivery {
     /**
      * 在指定位置放一座石碑，并为发射者激活。
      *
+     * @param customName 自定义名字，null/空白则用「空投点 x, z」
      * @return 是否成功放下
      */
-    public static boolean deliver(ServerLevel level, BlockPos pos, @Nullable ServerPlayer owner) {        Optional<IWaystone> placed = WaystonesAPI.placeWaystone(level, pos, WaystoneStyles.DEFAULT);
+    public static boolean deliver(ServerLevel level, BlockPos pos, @Nullable ServerPlayer owner,
+                                  @Nullable String customName) {        Optional<IWaystone> placed = WaystonesAPI.placeWaystone(level, pos, WaystoneStyles.DEFAULT);
         if (placed.isEmpty()) {
             return false;
         }
@@ -37,7 +39,10 @@ public final class WaystoneDelivery {
 
         // 玩家放置的石碑默认没有名字，列表里全是「未命名石碑」，给它一个可辨认的名字
         if (waystone instanceof IMutableWaystone mutable && !waystone.hasName()) {
-            mutable.setName("空投点 " + pos.getX() + ", " + pos.getZ());
+            String name = customName != null && !customName.isBlank()
+                    ? customName
+                    : "空投点 " + pos.getX() + ", " + pos.getZ();
+            mutable.setName(name);
             WaystoneManager.get(level.getServer()).updateWaystone(waystone);
             WaystoneSyncManager.sendWaystoneUpdateToAll(level.getServer(), waystone);
         }

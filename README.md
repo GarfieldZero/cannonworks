@@ -111,7 +111,7 @@ E:\.minecraft\versions\剑与王国\mods\cannonworks-0.1.0.jar
 
 ```
 /cannon testfire <距离> [俯仰角]                        空包弹（只炸坑）
-/cannon testfire waystone <距离> [俯仰角]               送一座传送石碑过去，落地自动为发射者激活
+/cannon testfire waystone <距离> [俯仰角] [名字]       送一座传送石碑过去，落地自动为发射者激活
 /cannon testfire buffer hay <距离> [俯仰角]             缓冲物·草垛：软着陆，不炸坑
 /cannon testfire buffer water <距离> [俯仰角]           缓冲物·水桶：软着陆，水放在落点旁边
 /cannon testfire filler <方块> <数量> <距离> [俯仰角]   填充物：炸坑 + 空投建材
@@ -124,9 +124,13 @@ E:\.minecraft\versions\剑与王国\mods\cannonworks-0.1.0.jar
 
 ```
 /cannon testfire waystone 800 45          # 800 格外落一座已激活的石碑，然后 /cannon tp <名字> 过去
+/cannon testfire waystone 800 45 北境哨站  # 同上，但石碑直接叫「北境哨站」
 /cannon testfire filler minecraft:obsidian 64 500 30     # 空投 64 块黑曜石
 /cannon testfire buffer hay 300 20        # 给 300 格外的落点铺草垛，人/货物摔不坏
 ```
+
+> 名字必须写在**最后**（greedy 参数），所以想命名时俯仰角不能省。
+> 不写名字时自动叫「空投点 x, z」。
 
 > `400` 是**距离**，不是坐标。旧写法 `testfire 400 ~ ~` 里的 400 是绝对 X 坐标，
 > 会导致所有炮弹都飞向世界坐标 x=400 的那个点——已改成距离语义。
