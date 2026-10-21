@@ -109,12 +109,17 @@ E:\.minecraft\versions\剑与王国\mods\cannonworks-0.1.0.jar
 ### 4.4 可用的测试命令
 
 ```
-/cannon testfire <x> <y> <z> [俯仰角]   # 从你脚下朝目标打一发
-/cannon testfire 10000 ~ ~ 45           # 10km 战略射程，约 4 分半
+/cannon testfire <距离> [俯仰角]        # 朝你面朝的方向打，400 = 前方 400 格（默认 45°）
+/cannon testfire 10000 45                # 10km 战略射程，约 4 分半
+/cannon testfire at <x> <y> <z> [俯仰]   # 朝绝对坐标打
+/cannon debug                            # 列出在飞的炮弹（tick、坐标、载体是否还在）
 /cannon waystones                        # 列出你已激活的石碑
 /cannon nearest                          # 最近的一座
 /cannon tp <名字>                         # 强制传送
 ```
+
+> `400` 是**距离**，不是坐标。旧写法 `testfire 400 ~ ~` 里的 400 是绝对 X 坐标，
+> 会导致所有炮弹都飞向世界坐标 x=400 的那个点——已改成距离语义。
 
 ### 4.5 干净的备用环境
 

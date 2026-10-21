@@ -250,7 +250,11 @@ JourneyMap 不是硬依赖——没装就退回「可点击坐标」。
 ## 11. 踩坑记录（给后续开发）
 
 1. **实体 tick 不可靠**：0 人服务器上 vanilla 盔甲架都不下落，靠 `Entity#tick()` 驱动的炮弹会冻住。
-   已改为 `ShellManager` 用 `ServerTickEvent` 全局推进（见 `entity/ShellManager.java`）。
-2. **迭代中回调删元素**：炮弹命中时 `discard()` → `untrack()` 改了正在遍历的列表，整服 CME 崩。
-   已改为快照遍历。
-3. **Balm/Waystones 的 Mixin 在 dev 环境需要 `mixin.env.remapRefMap`**（见 build.gradle）。
+2. **实体所在区块卸载 → 炮弹永久冻结**：实体被区块卸载带走并写进存档，玩家飞过去只看到一个悬在半空的壳。
+   最终架构：**飞行状态由 `ShellManager` 在服务端内存持有，实体只是可抛弃的视觉载体**——
+   载体没了就在当前位置重新生成一个，飞行照常继续（`/cannon debug` 能看到「载体:有/无」）。
+   实测：飞行途中 `/kill` 掉实体，3 秒后载体自动重建，5km 飞行照常落点。
+3. **迭代中回调删元素**：命中时 `discard()` → 回调改列表，整服 CME。
+4. **Balm/Waystones 的 Mixin 在 dev 环境需要 `mixin.env.remapRefMap`**（见 build.gradle）。
+5. **调试命令的坐标语义**：`testfire 400 ~ ~` 里的 400 是绝对 X 而不是距离，会让人误以为「落点都一样」。
+   已改成 `testfire <距离>` + `testfire at <x y z>`。
