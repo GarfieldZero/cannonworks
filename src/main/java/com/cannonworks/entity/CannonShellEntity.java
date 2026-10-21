@@ -142,11 +142,13 @@ public class CannonShellEntity extends Entity {
     private void impact(Vec3 at, String reason) {
         impacted = true;
         if (level() instanceof ServerLevel serverLevel) {
+            // 弹坑以命中点为中心（三维球），打在山壁上就炸在山壁上
+            int removed = com.cannonworks.impact.ImpactEffects.carveCrater(serverLevel, at, getDeltaMovement(), 3.0);
             serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, at.x, at.y, at.z, 1, 0.0, 0.0, 0.0, 0.0);
             serverLevel.playSound(null, at.x, at.y, at.z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0f, 0.7f);
-            CannonWorks.LOGGER.info("Cannon shell impact at {} ({}) after {} ticks, range {} blocks",
+            CannonWorks.LOGGER.info("Cannon shell impact at {} ({}) after {} ticks, range {} blocks, crater {} blocks",
                     String.format("%.1f/%.1f/%.1f", at.x, at.y, at.z), reason, age,
-                    String.format("%.1f", trajectory.range()));
+                    String.format("%.1f", trajectory.range()), removed);
             notifyOwner(serverLevel, at, reason);
         }
         discard();
