@@ -77,18 +77,54 @@ Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑�
 
 首次构建会下载 Forge/Minecraft 并反编译，约 5–15 分钟；之后增量构建很快。
 
-## 4. 装进你自己的整合包测试
+## 4. 安装到整合包 / 本地测试
 
-1. `.\gradlew.bat build`
-2. 把 `build/libs/cannonworks-0.1.0.jar` 复制到整合包的 `mods/` 目录
-3. 同目录还要有 **Waystones** 与它前置 **Balm**（`libs/` 里那两个 jar 就是）
-4. 进入世界后执行：
+### 4.1 需要哪几个 jar
+
+| jar | 作用 | 你机器上已有 |
+| --- | --- | --- |
+| `cannonworks-0.1.0.jar` | 本模组 | 本次构建产物 |
+| `waystones-forge-1.20.1-14.1.x.jar` | 传送石碑 | ✅ 14.1.17 |
+| `balm-forge-1.20.1-7.3.x-all.jar` | **Waystones 的硬前置**，缺了 Waystones 直接崩 | ✅ 7.3.34 |
+
+> Balm 是 Waystones 的 mandatory 依赖，不是本模组的。本模组对 Waystones 是**软依赖**：
+> 不装也能正常进游戏，只是 `/cannon waystones` 之类会提示「未检测到」。
+> 已核对：本模组调用的 4 个 Waystones API 在 14.1.17 里全部存在，二进制兼容。
+
+### 4.2 已经装好的位置（2026-10-21）
 
 ```
-/cannon waystones     # 列出你已激活的石碑
-/cannon nearest       # 最近的一座
-/cannon tp <名字>      # 强制传送（绕过冷却与经验消耗）
+E:\.minecraft\versions\剑与王国\mods\cannonworks-0.1.0.jar
 ```
+
+用 PCL 启动「剑与王国」即可。**卸载 = 删掉这个 jar**；目前没有自定义方块/物品，
+只有实体和命令，不会污染存档。
+
+### 4.3 测试注意
+
+1. **新建一个世界并开启作弊**，别用现有存档——弹坑会炸地形，开发版也随时可能崩。
+2. `/cannon` 需要权限等级 2（单人世界开作弊即可）。
+3. 264 个 mod 的整合包首次加载较慢；如果崩了，把 `E:\.minecraft\versions\剑与王国\crash-reports\` 里的文件发我。
+
+### 4.4 可用的测试命令
+
+```
+/cannon testfire <x> <y> <z> [俯仰角]   # 从你脚下朝目标打一发
+/cannon testfire 10000 ~ ~ 45           # 10km 战略射程，约 4 分半
+/cannon waystones                        # 列出你已激活的石碑
+/cannon nearest                          # 最近的一座
+/cannon tp <名字>                         # 强制传送
+```
+
+### 4.5 干净的备用环境
+
+```powershell
+cd "G:\我的世界大炮计划"
+.\gradlew.bat runClient
+```
+
+`run/` 里只装了 Forge 47.4.1 + Waystones 14.1.21 + Balm 7.3.44 + 本模组，
+不掺杂整合包里的 264 个 mod，排查「是不是本模组的问题」时用这个。
 
 ## 5. 联动的设计约定
 
@@ -101,8 +137,8 @@ Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑�
   - 事件：`WaystoneTeleportEvent.Pre / Post`（Balm 事件总线）
 - 详见 [`docs/waystones-integration-notes.md`](docs/waystones-integration-notes.md)。
 
-## 6. 待确认（影响后续实现）
+## 6. 下一步（M2）
 
-1. 大炮的**核心玩法**：固定炮台 / 手持发射器 / 载具？发射的是实体炮弹还是瞬时射线？
-2. 「联动」具体指什么：炮弹落点把玩家传送到石碑？大炮本身作为石碑之间的传送装置？炮击可以作为跨维度投送？
-3. 模组的正式名字与 modid（现在是占位的 `cannonworks` / `Cannon Works`）。
+1. 负载槽：特殊负载（传送石碑）/ 缓冲物（草垛、水桶）/ 填充物（方块）三栏。
+2. 落地：三维球形弹坑（已完成）+ 支撑位查找 + 石碑放置并激活发射者。
+3. 出膛弹道净空检查：开火前预告「预计在 x 处被拦截」。
