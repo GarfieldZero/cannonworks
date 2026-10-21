@@ -5,6 +5,24 @@ Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑�
 > 当前状态：**开发环境已就绪**（骨架工程 + 可编译 + Waystones 软依赖已打通）。
 > 大炮的具体玩法尚未实现，等待需求确认后继续。
 
+## 0. 环境自检结果（2026-10-21）
+
+| 检查项 | 结果 |
+| --- | --- |
+| JDK 17 | ✅ `C:\Program Files\Java\jdk-17`（17.0.12） |
+| Gradle 8.8 wrapper | ✅ 已配腾讯云镜像，首次构建自动下载 |
+| `gradlew build` | ✅ 产出 `build/libs/cannonworks-0.1.0.jar` |
+| `gradlew runServer` 冒烟测试 | ✅ `waystones` + `balm` + `cannonworks` 同时加载，`Done (4.287s)!` |
+| 日志自检 | ✅ `Cannon Works loaded (Waystones present: true)` |
+| `gradlew runClient` | ⏳ 未由我启动（会弹出游戏窗口），你随时可以自己跑 |
+
+两个踩过的坑，已在工程里修好：
+
+1. **Balm 的 Mixin 会让 dev 环境启动崩溃**（`m_129861_` 找不到目标方法）——
+   已加 `mixin.env.remapRefMap=true` + `refMapRemappingFile`，见 `build.gradle` 的 `runs.configureEach`。删掉这两行必定崩。
+2. **中文写入 `mods.toml` 会乱码**——`gradle.properties` 按 ISO-8859-1 读取，
+   所以中文描述改用 `\uXXXX` 转义，并给 Gradle 加了 `-Dfile.encoding=UTF-8`。
+
 ---
 
 ## 1. 技术栈
