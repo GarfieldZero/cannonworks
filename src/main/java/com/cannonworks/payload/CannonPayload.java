@@ -32,7 +32,9 @@ public record CannonPayload(Type type, @Nullable BlockState blockState, int fill
         /** 爆破：大半径弹坑 + 强化爆炸表现。 */
         TNT,
         /** 末影珍珠：把发射者直接传送到落点。 */
-        ENDER_PEARL
+        ENDER_PEARL,
+        /** 传送板：落地部署一块传送板。 */
+        WARP_PLATE
     }
 
     public static CannonPayload waystone() {
@@ -71,6 +73,10 @@ public record CannonPayload(Type type, @Nullable BlockState blockState, int fill
         return new CannonPayload(Type.ENDER_PEARL, null, 0, null);
     }
 
+    public static CannonPayload warpPlate() {
+        return new CannonPayload(Type.WARP_PLATE, null, 0, null);
+    }
+
     public String describe() {
         return switch (type) {
             case NONE -> "空";
@@ -80,6 +86,7 @@ public record CannonPayload(Type type, @Nullable BlockState blockState, int fill
             case FILLER -> "填充物 " + blockState.getBlock().getName().getString() + " ×" + fillerCount;
             case TNT -> "TNT 爆破";
             case ENDER_PEARL -> "末影珍珠";
+            case WARP_PLATE -> "传送板";
         };
     }
 

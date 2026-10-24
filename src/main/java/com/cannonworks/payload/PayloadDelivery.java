@@ -41,7 +41,22 @@ public final class PayloadDelivery {
             case WAYSTONE -> waystone(level, at, incoming, owner, payload);
             case TNT -> tnt(level, at, incoming);
             case ENDER_PEARL -> enderPearl(level, at, incoming, owner);
+            case WARP_PLATE -> warpPlate(level, at);
         };
+    }
+
+    /** 传送板：软着陆，直接铺在落点地面上。 */
+    private static String warpPlate(ServerLevel level, Vec3 at) {
+        if (!ModList.get().isLoaded("waystones")) {
+            return "未安装传送石碑，传送板丢失";
+        }
+        BlockPos landing = ImpactEffects.findLanding(level, at, 3, 16);
+        if (landing == null) {
+            WaystoneDelivery.dropAsItem(level, at);
+            return "传送板：落点找不到平地，已作为物品掉出";
+        }
+        boolean ok = WaystoneDelivery.placeWarpPlate(level, landing);
+        return ok ? "传送板已部署 @ " + fmt(landing) : "传送板部署失败";
     }
 
     /** 爆破：半径翻倍，外加多组爆炸粒子与低频轰鸣。 */

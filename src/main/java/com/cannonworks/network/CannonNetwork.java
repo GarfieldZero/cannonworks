@@ -27,5 +27,10 @@ public final class CannonNetwork {
                 .decoder(CannonControlPacket::decode)
                 .consumerMainThread(CannonControlPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(CannonAimPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(CannonAimPacket::encode)
+                .decoder(CannonAimPacket::decode)
+                .consumerMainThread(CannonAimPacket::handle)
+                .add();
     }
 }

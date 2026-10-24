@@ -207,10 +207,18 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         if (stack.is(Items.ENDER_PEARL)) {
             return CannonPayload.enderPearl();
         }
+        if (isWarpPlateItem(stack)) {
+            return CannonPayload.warpPlate();
+        }
         if (stack.getItem() instanceof BlockItem blockItem) {
             return CannonPayload.filler(blockItem.getBlock().defaultBlockState(), Math.min(stack.getCount(), 64));
         }
         return CannonPayload.NONE;
+    }
+
+    private static boolean isWarpPlateItem(ItemStack stack) {
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return "waystones".equals(id.getNamespace()) && id.getPath().contains("warp_plate");
     }
 
     /** 不硬依赖 Waystones：按注册名判断，避免类加载。 */

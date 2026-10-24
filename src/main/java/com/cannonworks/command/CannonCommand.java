@@ -101,7 +101,9 @@ public final class CannonCommand {
                 .then(Commands.literal("tnt")
                         .then(distanceBranch(context -> CannonPayload.tnt())))
                 .then(Commands.literal("pearl")
-                        .then(distanceBranch(context -> CannonPayload.enderPearl())));
+                        .then(distanceBranch(context -> CannonPayload.enderPearl())))
+                .then(Commands.literal("warpplate")
+                        .then(distanceBranch(context -> CannonPayload.warpPlate())));
     }
 
     /** 开发用：直接给方块装填 / 开火，用来做无头测试。 */

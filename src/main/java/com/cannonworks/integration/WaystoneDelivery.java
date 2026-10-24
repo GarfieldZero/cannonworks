@@ -73,6 +73,11 @@ public final class WaystoneDelivery {
         return true;
     }
 
+    /** 部署一块传送板（warp plate）。 */
+    public static boolean placeWarpPlate(ServerLevel level, BlockPos pos) {
+        return WaystonesAPI.placeWarpPlate(level, pos).isPresent();
+    }
+
     /** 立不起来时至少别把石碑弄丢：作为物品掉在落点。 */
     public static void dropAsItem(ServerLevel level, net.minecraft.world.phys.Vec3 at) {
         var block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(WaystoneStyles.DEFAULT.getBlockRegistryName());

@@ -13,9 +13,10 @@ Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑�
    - 传送石碑物品 → 落点立碑并给你激活（物品带自定义名字就用那个名字）
    - 干草垛 / 水桶 → 软着陆，不炸坑
    - **TNT → 大爆破**（半径 6，约 220~230 格方块；消耗 1 个）
+   - **传送板 → 落地部署一块传送板**（软着陆，不炸坑）
    - **末影珍珠 → 落地瞬间把你传送到落点**（消耗 1 个；你就是「人肉炮弹」）
    - 其他方块 → 炸坑 + 空投该方块（一次消耗整叠）
-4. 用 `俯仰 / 方位 / 装药` 三组 +/- 调好，点「点火」。
+4. 瞄准：**滑条**大范围拖，**↑↓ ←→** 微调俯仰/方位（每次 1°，Shift 5°），**PgUp/PgDn** 调装药；点「点火」。
 5. 炮弹飞 10 秒~4 分半，落地效果见上方表格。
 > 设计文档见 [`docs/design-v1.md`](docs/design-v1.md)。
 
@@ -129,6 +130,7 @@ E:\.minecraft\versions\剑与王国\mods\cannonworks-0.1.0.jar
 /cannon testfire filler <方块> <数量> <距离> [俯仰角]   填充物：炸坑 + 空投建材
 /cannon testfire tnt <距离> [俯仰角]                    TNT：半径 6 大爆破
 /cannon testfire pearl <距离> [俯仰角]                  末影珍珠：落地把人传送过去
+/cannon testfire warpplate <距离> [俯仰角]              传送板：落地部署一块传送板
 /cannon testfire at <x> <y> <z> [俯仰角]                朝绝对坐标打
 /cannon debug                                           列出在飞的炮弹（tick、坐标、负载、载体状态）
 /cannon waystones / nearest / tp <名字>                  传送石碑联动
