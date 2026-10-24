@@ -286,7 +286,11 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     public void load(CompoundTag tag) {
         super.load(tag);
         if (tag.contains("Inventory")) {
-            inventory.deserializeNBT(tag.getCompound("Inventory"));
+            // 旧存档只有 2 个槽，ItemStackHandler.deserializeNBT 会按 NBT 里的 Size 改槽位数，
+            // 导致新界面的第 3 个槽越界崩溃。这里强制按当前槽位数反序列化（物品按索引保留）。
+            CompoundTag inv = tag.getCompound("Inventory").copy();
+            inv.putInt("Size", inventory.getSlots());
+            inventory.deserializeNBT(inv);
         }
         pitch = tag.contains("Pitch") ? tag.getInt("Pitch") : pitch;
         yaw = tag.contains("Yaw") ? tag.getInt("Yaw") : yaw;
