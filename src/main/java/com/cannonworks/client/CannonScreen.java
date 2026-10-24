@@ -9,8 +9,10 @@ import java.util.function.IntConsumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import org.lwjgl.glfw.GLFW;
@@ -18,14 +20,11 @@ import org.lwjgl.glfw.GLFW;
 /**
  * 大炮的装填/瞄准界面。
  *
- * <p>瞄准交互分两档：</p>
- * <ul>
- *   <li><b>滑条</b>：大范围拖动（俯仰 5–85°、方位 0–359°、装药 0–40）；</li>
- *   <li><b>键盘</b>：↑↓ 微调俯仰、←→ 微调方位、PageUp/PageDown 微调装药，
- *       每次 1°，按住 Shift 每次 5°。</li>
- * </ul>
+ * <p>瞄准交互分两档：滑条拖动（大范围）+ 键盘微调（1°，Shift 5°）。</p>
  *
- * <p>槽位方框按 {@link Slot} 的真实坐标绘制，不存在错位。</p>
+ * <p>注意：{@link AbstractContainerScreen} 自己重写了 {@code mouseDragged} 用于拖拽物品，
+ * 且<b>不会转发给父类</b>，所以滑条在容器界面里天然拖不动。这里由本界面接管点击/拖拽，
+ * 直接把鼠标 X 映射成滑条值。</p>
  */
 public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
 
@@ -36,6 +35,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
     private static final int SLOT_SHADE = 0xFF373737;
     private static final int TEXT = 0x404040;
     private static final int TEXT_GOOD = 0x1F5F1F;
+    private static final int TEXT_HINT = 0x6A6A6A;
     private static final int TEXT_WARN = 0x9F1F1F;
 
     private static final int ROW_PITCH = 16;
@@ -43,18 +43,20 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
     private static final int ROW_CHARGE = 60;
     private static final int SLIDER_X = 56;
     private static final int SLIDER_WIDTH = 104;
+    private static final int SEPARATOR_Y = 155;
 
     private AimSlider pitchSlider;
     private AimSlider yawSlider;
     private AimSlider chargeSlider;
+    private AimSlider activeSlider;
     /** 本地刚改过值时，先别被服务端的旧数据回拉。 */
     private int holdSync;
 
     public CannonScreen(CannonMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
         this.imageWidth = 176;
-        this.imageHeight = 222;
-        this.inventoryLabelY = 129;
+        this.imageHeight = 240;
+        this.inventoryLabelY = 147;
     }
 
     @Override
@@ -99,6 +101,37 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         holdSync = 4;
     }
 
+    // ---- 滑条：自己接管点击与拖拽（容器界面不会把 drag 转发给控件） ----
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            for (GuiEventListener child : children()) {
+                if (child instanceof AimSlider slider && slider.visible && slider.isMouseOver(mouseX, mouseY)) {
+                    activeSlider = slider;
+                    slider.dragTo(mouseX);
+                    return true;
+                }
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (activeSlider != null && button == 0) {
+            activeSlider.dragTo(mouseX);
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        activeSlider = null;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         int step = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0 ? 5 : 1;
@@ -140,7 +173,6 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
             holdSync--;
             return;
         }
-        // 服务端数据（按钮/指令/重进界面）回流时，把滑条拉回一致
         pitchSlider.syncFromServer(menu.getData(CannonMenu.DATA_PITCH));
         yawSlider.syncFromServer(menu.getData(CannonMenu.DATA_YAW));
         chargeSlider.syncFromServer(menu.getData(CannonMenu.DATA_CHARGE));
@@ -157,7 +189,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         graphics.fill(x + imageWidth - 1, y, x + imageWidth, y + imageHeight, PANEL_DARK);
         graphics.fill(x, y + imageHeight - 1, x + imageWidth, y + imageHeight, PANEL_DARK);
 
-        graphics.fill(x + 7, y + 137, x + imageWidth - 7, y + 138, PANEL_DARK);
+        graphics.fill(x + 7, y + SEPARATOR_Y, x + imageWidth - 7, y + SEPARATOR_Y + 1, PANEL_DARK);
 
         for (Slot slot : menu.slots) {
             int sx = x + slot.x - 1;
@@ -182,8 +214,8 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
 
         graphics.drawString(font, "射程 " + range + " 格", SLIDER_X, 84, TEXT_GOOD, false);
         graphics.drawString(font, String.format("飞行 %.1f 秒", flight / 20.0), SLIDER_X, 96, TEXT_GOOD, false);
-        graphics.drawString(font, "↑↓ 俯仰  ←→ 方位  PgUp/PgDn 装药（Shift×5）",
-                8, 136, 0x6A6A6A, false);
+        graphics.drawString(font, "↑↓ 俯仰   ←→ 方位   PgUp/PgDn 装药（Shift×5）",
+                8, 136, TEXT_HINT, false);
 
         graphics.drawString(font, playerInventoryTitle, 8, inventoryLabelY, TEXT, false);
         if (cooldown > 0) {
@@ -191,7 +223,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         }
     }
 
-    /** 滑条：拖动时发绝对值包；服务端回流时再拉回一致。 */
+    /** 滑条：拖动由界面接管，值变化时发绝对值包。 */
     private static final class AimSlider extends AbstractSliderButton {
         private final String label;
         private final String unit;
@@ -224,6 +256,18 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
             return Math.max(min, Math.min(max, value));
         }
 
+        /** 鼠标 X → 滑条值（由界面在点击/拖拽时调用，绕开容器界面的拖拽吞事件）。 */
+        void dragTo(double mouseX) {
+            double newValue = Mth.clamp((mouseX - (getX() + 4)) / (getWidth() - 8.0), 0.0, 1.0);
+            this.value = newValue;
+            updateMessage();
+            int current = intValue();
+            if (current != lastSent) {
+                lastSent = current;
+                onChanged.accept(current);
+            }
+        }
+
         @Override
         protected void updateMessage() {
             setMessage(Component.literal(label + " " + intValue() + unit));
@@ -231,14 +275,13 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
 
         @Override
         protected void applyValue() {
-            int value = intValue();
-            if (value != lastSent) {
-                lastSent = value;
-                onChanged.accept(value);
+            int current = intValue();
+            if (current != lastSent) {
+                lastSent = current;
+                onChanged.accept(current);
             }
         }
 
-        /** 键盘微调后的乐观更新（不发包）。 */
         void setLocal(int value) {
             int clamped = clamp(value);
             this.value = ratio(clamped, min, max);
@@ -246,7 +289,6 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
             updateMessage();
         }
 
-        /** 服务端数据回流。 */
         void syncFromServer(int value) {
             int clamped = clamp(value);
             if (intValue() == clamped) {

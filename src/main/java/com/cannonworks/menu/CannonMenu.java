@@ -69,11 +69,11 @@ public class CannonMenu extends AbstractContainerMenu {
         // 玩家背包与快捷栏：整体下移到 y=140 / y=198，给上面的信息区和点火按钮留出空间
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 140 + row * 18));
+                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 158 + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(playerInventory, col, 8 + col * 18, 198));
+            addSlot(new Slot(playerInventory, col, 8 + col * 18, 216));
         }
 
         addDataSlots(data);
