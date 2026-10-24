@@ -62,16 +62,18 @@ public class CannonMenu extends AbstractContainerMenu {
             }
         };
 
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PROPELLANT, 30, 22));
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PAYLOAD, 30, 50));
+        // 机器区：左侧两个槽（火药 / 负载），坐标与 CannonScreen 的排版一一对应
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PROPELLANT, 30, 24));
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PAYLOAD, 30, 56));
 
+        // 玩家背包与快捷栏：整体下移到 y=140 / y=198，给上面的信息区和点火按钮留出空间
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 140 + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(playerInventory, col, 8 + col * 18, 142));
+            addSlot(new Slot(playerInventory, col, 8 + col * 18, 198));
         }
 
         addDataSlots(data);
