@@ -196,6 +196,13 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         if (stack.is(Items.WATER_BUCKET)) {
             return CannonPayload.water();
         }
+        // TNT 也是 BlockItem，必须排在「任意方块 → 填充物」之前
+        if (stack.is(Items.TNT)) {
+            return CannonPayload.tnt();
+        }
+        if (stack.is(Items.ENDER_PEARL)) {
+            return CannonPayload.enderPearl();
+        }
         if (stack.getItem() instanceof BlockItem blockItem) {
             return CannonPayload.filler(blockItem.getBlock().defaultBlockState(), Math.min(stack.getCount(), 64));
         }

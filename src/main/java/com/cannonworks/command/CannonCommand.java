@@ -97,7 +97,11 @@ public final class CannonCommand {
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 256))
                                         .then(distanceBranch(context -> CannonPayload.filler(
                                                 BlockStateArgument.getBlock(context, "block").getState(),
-                                                IntegerArgumentType.getInteger(context, "count")))))));
+                                                IntegerArgumentType.getInteger(context, "count")))))))
+                .then(Commands.literal("tnt")
+                        .then(distanceBranch(context -> CannonPayload.tnt())))
+                .then(Commands.literal("pearl")
+                        .then(distanceBranch(context -> CannonPayload.enderPearl())));
     }
 
     /** 开发用：直接给方块装填 / 开火，用来做无头测试。 */

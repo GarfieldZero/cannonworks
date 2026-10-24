@@ -28,7 +28,11 @@ public record CannonPayload(Type type, @Nullable BlockState fillerState, int fil
         /** 缓冲物·水桶：无弹坑，落点旁边放水。 */
         BUFFER_WATER,
         /** 填充物：有弹坑，填充方块零散嵌在坑里，相当于空投建材。 */
-        FILLER
+        FILLER,
+        /** 爆破：大半径弹坑 + 强化爆炸表现。 */
+        TNT,
+        /** 末影珍珠：把发射者直接传送到落点。 */
+        ENDER_PEARL
     }
 
     public static CannonPayload waystone() {
@@ -51,6 +55,14 @@ public record CannonPayload(Type type, @Nullable BlockState fillerState, int fil
         return new CannonPayload(Type.FILLER, state, Math.max(1, count), null);
     }
 
+    public static CannonPayload tnt() {
+        return new CannonPayload(Type.TNT, null, 0, null);
+    }
+
+    public static CannonPayload enderPearl() {
+        return new CannonPayload(Type.ENDER_PEARL, null, 0, null);
+    }
+
     public String describe() {
         return switch (type) {
             case NONE -> "空";
@@ -58,6 +70,8 @@ public record CannonPayload(Type type, @Nullable BlockState fillerState, int fil
             case BUFFER_HAY -> "缓冲物·草垛";
             case BUFFER_WATER -> "缓冲物·水桶";
             case FILLER -> "填充物 " + fillerState.getBlock().getName().getString() + " ×" + fillerCount;
+            case TNT -> "TNT 爆破";
+            case ENDER_PEARL -> "末影珍珠";
         };
     }
 

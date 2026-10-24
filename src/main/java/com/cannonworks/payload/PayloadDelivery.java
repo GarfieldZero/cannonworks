@@ -39,7 +39,41 @@ public final class PayloadDelivery {
             case BUFFER_WATER -> water(level, at, incoming);
             case FILLER -> filler(level, at, incoming, payload);
             case WAYSTONE -> waystone(level, at, incoming, owner, payload);
+            case TNT -> tnt(level, at, incoming);
+            case ENDER_PEARL -> enderPearl(level, at, incoming, owner);
         };
+    }
+
+    /** 爆破：半径翻倍，外加多组爆炸粒子与低频轰鸣。 */
+    private static String tnt(ServerLevel level, Vec3 at, Vec3 incoming) {
+        int carved = ImpactEffects.carveCrater(level, at, incoming, 6.0);
+        for (int i = 0; i < 8; i++) {
+            double dx = (level.random.nextDouble() - 0.5) * 6.0;
+            double dy = (level.random.nextDouble() - 0.5) * 4.0;
+            double dz = (level.random.nextDouble() - 0.5) * 6.0;
+            level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
+                    at.x + dx, at.y + dy, at.z + dz, 1, 0.0, 0.0, 0.0, 0.0);
+        }
+        level.playSound(null, at.x, at.y, at.z, net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE,
+                net.minecraft.sounds.SoundSource.BLOCKS, 8.0f, 0.4f);
+        return "TNT 爆破 " + carved + " 格";
+    }
+
+    /** 末影珍珠：把发射者直接传送到落点（飞行途中他还在炮位上）。 */
+    private static String enderPearl(ServerLevel level, Vec3 at, Vec3 incoming, @Nullable ServerPlayer owner) {
+        BlockPos landing = ImpactEffects.findLanding(level, at, 3, 16);
+        if (landing == null) {
+            return "末影珍珠：落点找不到能站的位置";
+        }
+        if (owner == null) {
+            return "末影珍珠落在 " + fmt(landing) + "（无发射者，未传送）";
+        }
+        owner.teleportTo(level, landing.getX() + 0.5, landing.getY(), landing.getZ() + 0.5,
+                owner.getYRot(), owner.getXRot());
+        owner.setDeltaMovement(Vec3.ZERO);
+        owner.resetFallDistance();
+        owner.invulnerableTime = 40;
+        return "末影珍珠把 " + owner.getName().getString() + " 送到 " + fmt(landing);
     }
 
     /** 缓冲物·草垛：不炸坑，落点正下方一格换成草垛。 */
