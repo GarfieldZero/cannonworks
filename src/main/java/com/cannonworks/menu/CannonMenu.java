@@ -1,6 +1,7 @@
 package com.cannonworks.menu;
 
 import com.cannonworks.block.CannonBlockEntity;
+import com.cannonworks.payload.FireMode;
 import com.cannonworks.registry.ModMenus;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -24,6 +25,7 @@ public class CannonMenu extends AbstractContainerMenu {
     public static final int DATA_COOLDOWN = 3;
     public static final int DATA_RANGE = 4;
     public static final int DATA_FLIGHT = 5;
+    public static final int DATA_MODE = 6;
 
     private final CannonBlockEntity blockEntity;
     private final ContainerData data;
@@ -41,6 +43,7 @@ public class CannonMenu extends AbstractContainerMenu {
                     case DATA_COOLDOWN -> blockEntity.getCooldown();
                     case DATA_RANGE -> blockEntity.getRange();
                     case DATA_FLIGHT -> blockEntity.getFlightTicks();
+                    case DATA_MODE -> blockEntity.getMode().ordinal();
                     default -> 0;
                 };
             }
@@ -51,6 +54,7 @@ public class CannonMenu extends AbstractContainerMenu {
                     case DATA_PITCH -> blockEntity.setPitch(value);
                     case DATA_YAW -> blockEntity.setYaw(value);
                     case DATA_CHARGE -> blockEntity.setCharge(value);
+                    case DATA_MODE -> blockEntity.setMode(FireMode.values()[Math.max(0, Math.min(1, value))]);
                     default -> {
                     }
                 }
@@ -58,13 +62,14 @@ public class CannonMenu extends AbstractContainerMenu {
 
             @Override
             public int getCount() {
-                return 6;
+                return 7;
             }
         };
 
         // 机器区：左侧两个槽（火药 / 负载），坐标与 CannonScreen 的排版一一对应
         addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PROPELLANT, 30, 24));
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PAYLOAD, 30, 56));
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_FILLER, 30, 52));
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_CARGO, 30, 80));
 
         // 玩家背包与快捷栏：整体下移到 y=140 / y=198，给上面的信息区和点火按钮留出空间
         for (int row = 0; row < 3; row++) {
@@ -102,7 +107,7 @@ public class CannonMenu extends AbstractContainerMenu {
         }
         ItemStack stack = slot.getItem();
         ItemStack copy = stack.copy();
-        int machineSlots = 2;
+        int machineSlots = 3;
         if (index < machineSlots) {
             if (!moveItemStackTo(stack, machineSlots, slots.size(), true)) {
                 return ItemStack.EMPTY;

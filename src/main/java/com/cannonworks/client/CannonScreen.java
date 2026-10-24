@@ -5,6 +5,7 @@ import com.cannonworks.menu.CannonMenu;
 import com.cannonworks.network.CannonAimPacket;
 import com.cannonworks.network.CannonControlPacket;
 import com.cannonworks.network.CannonNetwork;
+import com.cannonworks.payload.FireMode;
 import java.util.function.IntConsumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -49,6 +50,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
     private AimSlider yawSlider;
     private AimSlider chargeSlider;
     private AimSlider activeSlider;
+    private Button modeButton;
     /** 本地刚改过值时，先别被服务端的旧数据回拉。 */
     private int holdSync;
 
@@ -77,12 +79,33 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         addRenderableWidget(Button.builder(Component.literal("点火"), b -> fire())
                 .bounds(leftPos + SLIDER_X, topPos + 112, SLIDER_WIDTH, 20)
                 .build());
+        modeButton = Button.builder(modeLabel(), b -> toggleMode())
+                .bounds(leftPos + SLIDER_X, topPos + 136, SLIDER_WIDTH, 16)
+                .build();
+        addRenderableWidget(modeButton);
     }
 
     private void sendAim() {
         CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(
                 menu.getBlockEntity().getBlockPos(),
-                pitchSlider.intValue(), yawSlider.intValue(), chargeSlider.intValue()));
+                pitchSlider.intValue(), yawSlider.intValue(), chargeSlider.intValue(), currentMode()));
+        holdSync = 6;
+    }
+
+    private FireMode currentMode() {
+        FireMode[] values = FireMode.values();
+        return values[Mth.clamp(menu.getData(CannonMenu.DATA_MODE), 0, values.length - 1)];
+    }
+
+    private Component modeLabel() {
+        return Component.literal("模式：" + currentMode().label());
+    }
+
+    private void toggleMode() {
+        FireMode next = currentMode().next();
+        CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(
+                menu.getBlockEntity().getBlockPos(),
+                pitchSlider.intValue(), yawSlider.intValue(), chargeSlider.intValue(), next));
         holdSync = 6;
     }
 
@@ -176,6 +199,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         pitchSlider.syncFromServer(menu.getData(CannonMenu.DATA_PITCH));
         yawSlider.syncFromServer(menu.getData(CannonMenu.DATA_YAW));
         chargeSlider.syncFromServer(menu.getData(CannonMenu.DATA_CHARGE));
+        modeButton.setMessage(modeLabel());
     }
 
     @Override
@@ -210,12 +234,11 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
 
         graphics.drawString(font, title, 8, 6, TEXT, false);
         graphics.drawString(font, "火药", 8, 29, TEXT, false);
-        graphics.drawString(font, "负载", 8, 61, TEXT, false);
+        graphics.drawString(font, "填充", 8, 57, TEXT, false);
+        graphics.drawString(font, "货物", 8, 85, TEXT, false);
 
         graphics.drawString(font, "射程 " + range + " 格", SLIDER_X, 84, TEXT_GOOD, false);
         graphics.drawString(font, String.format("飞行 %.1f 秒", flight / 20.0), SLIDER_X, 96, TEXT_GOOD, false);
-        graphics.drawString(font, "↑↓ 俯仰   ←→ 方位   PgUp/PgDn 装药（Shift×5）",
-                8, 136, TEXT_HINT, false);
 
         graphics.drawString(font, playerInventoryTitle, 8, inventoryLabelY, TEXT, false);
         if (cooldown > 0) {

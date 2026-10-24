@@ -12,6 +12,7 @@ import com.cannonworks.block.CannonBlockEntity;
 import com.cannonworks.entity.ShellManager;
 import com.cannonworks.integration.WaystoneTargets;
 import com.cannonworks.payload.CannonPayload;
+import com.cannonworks.payload.FireMode;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -21,6 +22,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.blocks.BlockStateArgument;
@@ -43,12 +45,12 @@ import net.minecraftforge.fml.common.Mod;
  * 开发期调试命令。
  *
  * <pre>
- * /cannon testfire &lt;距离&gt; [俯仰]                     空包弹（只炸坑）
- * /cannon testfire waystone &lt;距离&gt; [俯仰]            送一座传送石碑过去并激活
- * /cannon testfire buffer hay|water &lt;距离&gt; [俯仰]   缓冲物：软着陆，不炸坑
- * /cannon testfire filler &lt;方块&gt; &lt;数量&gt; &lt;距离&gt; [俯仰]  空投建材
- * /cannon testfire at &lt;x&gt; &lt;y&gt; &lt;z&gt; [俯仰]           朝绝对坐标打
- * /cannon debug                                      列出在飞的炮弹
+ * /cannon testfire &lt;距离&gt; [俯仰] [airburst]                  空包弹
+ * /cannon testfire cargo &lt;waystone|tnt|pearl|warpplate&gt; ...  只带货物
+ * /cannon testfire fill &lt;方块&gt; &lt;数量&gt; ...                     只带填充
+ * /cannon testfire full &lt;方块&gt; &lt;数量&gt; &lt;货物&gt; ...              填充 + 货物
+ * /cannon testfire at &lt;x&gt; &lt;y&gt; &lt;z&gt; [俯仰]
+ * /cannon block load|fire ...                                  给方块装填/开火（无头测试）
  * </pre>
  */
 @Mod.EventBusSubscriber(modid = CannonWorks.MOD_ID)
@@ -61,61 +63,152 @@ public final class CannonCommand {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
         dispatcher.register(Commands.literal("cannon")
                 .requires(source -> source.hasPermission(2))
-                .then(Commands.literal("waystones")
-                        .executes(CannonCommand::listWaystones))
-                .then(Commands.literal("nearest")
-                        .executes(CannonCommand::nearestWaystone))
+                .then(Commands.literal("waystones").executes(CannonCommand::listWaystones))
+                .then(Commands.literal("nearest").executes(CannonCommand::nearestWaystone))
                 .then(Commands.literal("tp")
                         .then(Commands.argument("name", StringArgumentType.greedyString())
                                 .executes(CannonCommand::teleportTo)))
-                .then(Commands.literal("debug")
-                        .executes(CannonCommand::debugFlights))
+                .then(Commands.literal("debug").executes(CannonCommand::debugFlights))
+                .then(Commands.literal("probe")
+                        .then(Commands.argument("from", Vec3Argument.vec3())
+                                .then(Commands.argument("to", Vec3Argument.vec3())
+                                        .executes(CannonCommand::probeClip))))
                 .then(blockDebugNode(event.getBuildContext()))
                 .then(testfireNode(event.getBuildContext())));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> testfireNode(
-            net.minecraft.commands.CommandBuildContext buildContext) {
+    // ---- testfire ----
+
+    private static LiteralArgumentBuilder<CommandSourceStack> testfireNode(CommandBuildContext buildContext) {
         return Commands.literal("testfire")
-                .then(distanceBranch(context -> CannonPayload.NONE))
+                .then(launchBranch(context -> CannonPayload.EMPTY))
                 .then(Commands.literal("at")
                         .then(Commands.argument("target", Vec3Argument.vec3())
-                                .executes(context -> fireAt(context, 45.0, CannonPayload.NONE))
-                                .then(pitchArgument()
-                                        .executes(context -> fireAt(context,
-                                                DoubleArgumentType.getDouble(context, "pitch"), CannonPayload.NONE)))))
-                .then(Commands.literal("waystone")
-                        // waystone <距离> [俯仰] [名字]
-                        .then(waystoneBranch()))
-                .then(Commands.literal("buffer")
-                        .then(Commands.literal("hay")
-                                .then(distanceBranch(context -> CannonPayload.hay())))
-                        .then(Commands.literal("water")
-                                .then(distanceBranch(context -> CannonPayload.water()))))
-                .then(Commands.literal("filler")
+                                .executes(context -> fireAt(context, 45.0))
+                                .then(pitchArgument().executes(context -> fireAt(context,
+                                        DoubleArgumentType.getDouble(context, "pitch"))))))
+                .then(Commands.literal("cargo")
+                        .then(Commands.literal("waystone")
+                                .then(launchBranch(context -> CannonPayload.cargo(
+                                        CannonPayload.Cargo.WAYSTONE, null, null))))
+                        .then(Commands.literal("tnt")
+                                .then(launchBranch(context -> CannonPayload.cargo(
+                                        CannonPayload.Cargo.TNT, null, null))))
+                        .then(Commands.literal("pearl")
+                                .then(launchBranch(context -> CannonPayload.cargo(
+                                        CannonPayload.Cargo.ENDER_PEARL, null, null))))
+                        .then(Commands.literal("warpplate")
+                                .then(launchBranch(context -> CannonPayload.cargo(
+                                        CannonPayload.Cargo.WARP_PLATE, null, null)))))
+                .then(Commands.literal("fill")
                         .then(Commands.argument("block", BlockStateArgument.block(buildContext))
-                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 256))
-                                        .then(distanceBranch(context -> CannonPayload.filler(
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
+                                        .then(launchBranch(context -> CannonPayload.filler(
                                                 BlockStateArgument.getBlock(context, "block").getState(),
                                                 IntegerArgumentType.getInteger(context, "count")))))))
-                .then(Commands.literal("tnt")
-                        .then(distanceBranch(context -> CannonPayload.tnt())))
-                .then(Commands.literal("pearl")
-                        .then(distanceBranch(context -> CannonPayload.enderPearl())))
-                .then(Commands.literal("warpplate")
-                        .then(distanceBranch(context -> CannonPayload.warpPlate())));
+                .then(Commands.literal("full")
+                        .then(Commands.argument("block", BlockStateArgument.block(buildContext))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
+                                        .then(Commands.literal("waystone")
+                                                .then(launchBranch(context -> payloadWithCargo(context,
+                                                        CannonPayload.Cargo.WAYSTONE))))
+                                        .then(Commands.literal("tnt")
+                                                .then(launchBranch(context -> payloadWithCargo(context,
+                                                        CannonPayload.Cargo.TNT))))
+                                        .then(Commands.literal("pearl")
+                                                .then(launchBranch(context -> payloadWithCargo(context,
+                                                        CannonPayload.Cargo.ENDER_PEARL))))
+                                        .then(Commands.literal("warpplate")
+                                                .then(launchBranch(context -> payloadWithCargo(context,
+                                                        CannonPayload.Cargo.WARP_PLATE)))))));
     }
 
-    /** 开发用：直接给方块装填 / 开火，用来做无头测试。 */
-    private static LiteralArgumentBuilder<CommandSourceStack> blockDebugNode(
-            net.minecraft.commands.CommandBuildContext buildContext) {
+    private static CannonPayload payloadWithCargo(CommandContext<CommandSourceStack> context,
+                                                  CannonPayload.Cargo cargo) {
+        BlockState state = BlockStateArgument.getBlock(context, "block").getState();
+        int count = IntegerArgumentType.getInteger(context, "count");
+        return CannonPayload.of(state, count, cargo, null, null);
+    }
+
+    /** `<距离> [俯仰] [airburst]`，四种模式共用。 */
+    private static ArgumentBuilder<CommandSourceStack, ?> launchBranch(
+            Function<CommandContext<CommandSourceStack>, CannonPayload> payloadFactory) {
+        return Commands.argument("distance", DoubleArgumentType.doubleArg(4.0, Ballistics.MAX_RANGE))
+                .executes(context -> fireRelative(context, 45.0, payloadFactory.apply(context), FireMode.CONTACT))
+                .then(pitchArgument()
+                        .executes(context -> fireRelative(context, DoubleArgumentType.getDouble(context, "pitch"),
+                                payloadFactory.apply(context), FireMode.CONTACT))
+                        .then(Commands.literal("airburst")
+                                .executes(context -> fireRelative(context,
+                                        DoubleArgumentType.getDouble(context, "pitch"),
+                                        payloadFactory.apply(context), FireMode.AIRBURST))));
+    }
+
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, Double> pitchArgument() {
+        return Commands.argument("pitch", DoubleArgumentType.doubleArg(Ballistics.MIN_PITCH, Ballistics.MAX_PITCH));
+    }
+
+    private static int fireRelative(CommandContext<CommandSourceStack> context, double pitchDeg,
+                                    CannonPayload payload, FireMode mode) {
+        CommandSourceStack source = context.getSource();
+        double distance = DoubleArgumentType.getDouble(context, "distance");
+        Vec3 origin = source.getPosition().add(0.0, 1.5, 0.0);
+        Vec3 facing = Vec3.directionFromRotation(0.0f, source.getRotation().y);
+        Vec3 horizontal = new Vec3(facing.x, 0.0, facing.z);
+        if (horizontal.lengthSqr() < 1.0E-6) {
+            horizontal = new Vec3(0.0, 0.0, 1.0);
+        }
+        Vec3 target = origin.add(horizontal.normalize().scale(distance));
+        return launch(source, origin, target, pitchDeg, payload, mode);
+    }
+
+    private static int fireAt(CommandContext<CommandSourceStack> context, double pitchDeg) {
+        CommandSourceStack source = context.getSource();
+        Vec3 target = Vec3Argument.getVec3(context, "target");
+        Vec3 origin = source.getPosition().add(0.0, 1.5, 0.0);
+        return launch(source, origin, target, pitchDeg, CannonPayload.EMPTY, FireMode.CONTACT);
+    }
+
+    private static int launch(CommandSourceStack source, Vec3 origin, Vec3 target, double pitchDeg,
+                              CannonPayload payload, FireMode mode) {
+        Trajectory trajectory = Ballistics.create(origin, target, pitchDeg);
+        if (trajectory.range() > Ballistics.MAX_RANGE) {
+            source.sendFailure(Component.literal(String.format(
+                    "射程 %.0f 格超出单发上限 %.0f 格", trajectory.range(), Ballistics.MAX_RANGE)));
+            return 0;
+        }
+        UUID owner = source.getEntity() instanceof ServerPlayer player ? player.getUUID() : null;
+        ShellManager.launch(source.getLevel(), trajectory, owner, payload, mode);
+
+        source.sendSuccess(() -> Component.literal(String.format(
+                "试射[%s]：射程 %.1f 格，俯仰 %.0f°，顶点 %.0f 格，飞行 %.1f 秒，负载[%s]",
+                mode.label(), trajectory.range(), pitchDeg, trajectory.apex(), trajectory.flightTicks() / 20.0,
+                payload.describe())), false);
+        return 1;
+    }
+
+    private static int probeClip(CommandContext<CommandSourceStack> context) {
+        Vec3 from = Vec3Argument.getVec3(context, "from");
+        Vec3 to = Vec3Argument.getVec3(context, "to");
+        net.minecraft.world.phys.BlockHitResult hit = context.getSource().getLevel().clip(
+                new net.minecraft.world.level.ClipContext(from, to,
+                        net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE, null));
+        context.getSource().sendSuccess(() -> Component.literal(
+                "clip=" + hit.getType() + " @ " + hit.getBlockPos().toShortString() + " loc=" + hit.getLocation()), false);
+        return 1;
+    }
+
+    // ---- 方块调试（无头测试用） ----
+
+    private static LiteralArgumentBuilder<CommandSourceStack> blockDebugNode(CommandBuildContext buildContext) {
         return Commands.literal("block")
                 .then(Commands.literal("fire")
                         .then(Commands.argument("pos", BlockPosArgument.blockPos())
                                 .executes(CannonCommand::blockFire)))
                 .then(Commands.literal("load")
                         .then(Commands.argument("pos", BlockPosArgument.blockPos())
-                                .then(Commands.argument("slot", IntegerArgumentType.integer(0, 1))
+                                .then(Commands.argument("slot", IntegerArgumentType.integer(0, 2))
                                         .then(Commands.argument("item", ItemArgument.item(buildContext))
                                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
                                                         .executes(CannonCommand::blockLoad))))));
@@ -150,78 +243,6 @@ public final class CannonCommand {
         return 1;
     }
 
-    /** `<距离> [俯仰]` 这一段子树，被普通/石碑/缓冲/填充四种模式复用。 */
-    private static ArgumentBuilder<CommandSourceStack, ?> distanceBranch(
-            Function<CommandContext<CommandSourceStack>, CannonPayload> payloadFactory) {
-        return Commands.argument("distance", DoubleArgumentType.doubleArg(4.0, Ballistics.MAX_RANGE))
-                .executes(context -> fireRelative(context, 45.0, payloadFactory.apply(context)))
-                .then(pitchArgument()
-                        .executes(context -> fireRelative(context,
-                                DoubleArgumentType.getDouble(context, "pitch"), payloadFactory.apply(context))));
-    }
-
-    /**
-     * 石碑专用：`<距离> [俯仰] [名字]`。
-     *
-     * <p>名字必须是<b>最后一个</b>参数（greedy），所以想命名时俯仰角不能省——
-     * 省了的话 Brigadier 没法区分「名字」和「俯仰角」。</p>
-     */
-    private static ArgumentBuilder<CommandSourceStack, ?> waystoneBranch() {
-        return Commands.argument("distance", DoubleArgumentType.doubleArg(4.0, Ballistics.MAX_RANGE))
-                .executes(context -> fireRelative(context, 45.0, CannonPayload.waystone()))
-                .then(pitchArgument()
-                        .executes(context -> fireRelative(context,
-                                DoubleArgumentType.getDouble(context, "pitch"), CannonPayload.waystone()))
-                        .then(Commands.argument("name", StringArgumentType.greedyString())
-                                .executes(context -> fireRelative(context,
-                                        DoubleArgumentType.getDouble(context, "pitch"),
-                                        CannonPayload.waystone(StringArgumentType.getString(context, "name"))))));
-    }
-
-    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, Double> pitchArgument() {
-        return Commands.argument("pitch", DoubleArgumentType.doubleArg(Ballistics.MIN_PITCH, Ballistics.MAX_PITCH));
-    }
-
-    /** 朝执行者面朝的水平方向打指定距离。 */
-    private static int fireRelative(CommandContext<CommandSourceStack> context, double pitchDeg, CannonPayload payload) {
-        CommandSourceStack source = context.getSource();
-        double distance = DoubleArgumentType.getDouble(context, "distance");
-        Vec3 origin = source.getPosition().add(0.0, 1.5, 0.0);
-        Vec3 facing = Vec3.directionFromRotation(0.0f, source.getRotation().y);
-        Vec3 horizontal = new Vec3(facing.x, 0.0, facing.z);
-        if (horizontal.lengthSqr() < 1.0E-6) {
-            horizontal = new Vec3(0.0, 0.0, 1.0);
-        }
-        Vec3 target = origin.add(horizontal.normalize().scale(distance));
-        return launch(source, origin, target, pitchDeg, payload);
-    }
-
-    /** 朝绝对坐标打。 */
-    private static int fireAt(CommandContext<CommandSourceStack> context, double pitchDeg, CannonPayload payload) {
-        CommandSourceStack source = context.getSource();
-        Vec3 target = Vec3Argument.getVec3(context, "target");
-        Vec3 origin = source.getPosition().add(0.0, 1.5, 0.0);
-        return launch(source, origin, target, pitchDeg, payload);
-    }
-
-    private static int launch(CommandSourceStack source, Vec3 origin, Vec3 target, double pitchDeg,
-                              CannonPayload payload) {
-        Trajectory trajectory = Ballistics.create(origin, target, pitchDeg);
-        if (trajectory.range() > Ballistics.MAX_RANGE) {
-            source.sendFailure(Component.literal(String.format(
-                    "射程 %.0f 格超出单发上限 %.0f 格", trajectory.range(), Ballistics.MAX_RANGE)));
-            return 0;
-        }
-        UUID owner = source.getEntity() instanceof ServerPlayer player ? player.getUUID() : null;
-        ShellManager.launch(source.getLevel(), trajectory, owner, payload);
-
-        source.sendSuccess(() -> Component.literal(String.format(
-                "试射：射程 %.1f 格，俯仰 %.0f°，顶点 %.0f 格，飞行 %.1f 秒，负载[%s]",
-                trajectory.range(), pitchDeg, trajectory.apex(), trajectory.flightTicks() / 20.0,
-                payload.describe())), false);
-        return 1;
-    }
-
     private static int debugFlights(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         List<ShellManager.Flight> flights = ShellManager.activeFlights();
@@ -236,6 +257,8 @@ public final class CannonCommand {
         }
         return Math.max(1, flights.size());
     }
+
+    // ---- 传送石碑联动 ----
 
     private static int listWaystones(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();

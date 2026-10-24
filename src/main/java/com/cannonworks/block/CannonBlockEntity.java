@@ -6,6 +6,7 @@ import com.cannonworks.ballistics.Trajectory;
 import com.cannonworks.entity.ShellManager;
 import com.cannonworks.menu.CannonMenu;
 import com.cannonworks.payload.CannonPayload;
+import com.cannonworks.payload.FireMode;
 import com.cannonworks.registry.ModBlockEntities;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -40,12 +41,15 @@ import net.minecraftforge.items.ItemStackHandler;
 public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
     public static final int SLOT_PROPELLANT = 0;
-    public static final int SLOT_PAYLOAD = 1;
+    /** 填充方块（任意方块）。 */
+    public static final int SLOT_FILLER = 1;
+    /** 货物（石碑 / TNT / 末影珍珠 / 传送板）。 */
+    public static final int SLOT_CARGO = 2;
     public static final int MAX_CHARGE = 40;
     public static final int RANGE_PER_CHARGE = 300;
     public static final int FIRE_COOLDOWN_TICKS = 40;
 
-    private final ItemStackHandler inventory = new ItemStackHandler(2) {
+    private final ItemStackHandler inventory = new ItemStackHandler(3) {
         @Override
         protected void onContentsChanged(int slot) {
             setChanged();
@@ -56,6 +60,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     private int yaw;
     private int charge = 8;
     private long cooldownUntil;
+    private FireMode mode = FireMode.CONTACT;
 
     public CannonBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.CANNON.get(), pos, state);
@@ -86,6 +91,20 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
     public int getCharge() {
         return charge;
+    }
+
+    public FireMode getMode() {
+        return mode;
+    }
+
+    public void setMode(FireMode value) {
+        this.mode = value;
+        setChanged();
+        syncToClients();
+    }
+
+    public void toggleMode() {
+        setMode(mode.next());
     }
 
     public int getCooldown() {
@@ -147,8 +166,9 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         ItemStack propellant = inventory.getStackInSlot(SLOT_PROPELLANT);
         int usedPowder = Math.min(charge, propellant.getCount());
 
-        ItemStack payloadStack = inventory.getStackInSlot(SLOT_PAYLOAD);
-        CannonPayload payload = resolvePayload(payloadStack);
+        ItemStack fillerStack = inventory.getStackInSlot(SLOT_FILLER);
+        ItemStack cargoStack = inventory.getStackInSlot(SLOT_CARGO);
+        CannonPayload payload = resolvePayload(fillerStack, cargoStack);
 
         Vec3 direction = Vec3.directionFromRotation(0.0f, yaw);
         Vec3 origin = Vec3.atCenterOf(worldPosition).add(0.0, 0.9, 0.0).add(direction.scale(1.6));
@@ -156,13 +176,16 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         Vec3 target = origin.add(direction.scale(range));
         Trajectory trajectory = Ballistics.create(origin, target, pitch);
 
-        // 先算好掉落物（水桶会留下空桶），再扣物品
-        ItemStack remainder = payloadStack.isEmpty() ? ItemStack.EMPTY : payloadStack.getCraftingRemainingItem();
-        int payloadCost = payload.type() == CannonPayload.Type.FILLER ? payloadStack.getCount() : 1;
+        ItemStack remainder = cargoStack.isEmpty() ? ItemStack.EMPTY : cargoStack.getCraftingRemainingItem();
 
         propellant.shrink(usedPowder);
-        if (!payloadStack.isEmpty()) {
-            inventory.extractItem(SLOT_PAYLOAD, payloadCost, false);
+        // 填充方块：整叠装、整叠打（1:1 铺到落点）
+        if (payload.hasFiller()) {
+            inventory.extractItem(SLOT_FILLER, payload.fillerCount(), false);
+        }
+        // 货物：一次消耗一个
+        if (payload.hasCargo()) {
+            inventory.extractItem(SLOT_CARGO, 1, false);
         }
         if (!remainder.isEmpty()) {
             if (player == null || !player.getInventory().add(remainder)) {
@@ -170,7 +193,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
             }
         }
 
-        ShellManager.launch((ServerLevel) level, trajectory, player != null ? player.getUUID() : null, payload);
+        ShellManager.launch((ServerLevel) level, trajectory, player != null ? player.getUUID() : null, payload, mode);
         cooldownUntil = level.getGameTime() + FIRE_COOLDOWN_TICKS;
         setChanged();
         syncToClients();
@@ -181,41 +204,33 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         return true;
     }
 
-    /** 把槽位里的物品翻译成负载类型。任意方块 = 填充物（空投建材）。 */
-    public static CannonPayload resolvePayload(ItemStack stack) {
-        if (stack.isEmpty()) {
-            return CannonPayload.NONE;
+    /** 由「填充槽 + 货物槽」组合出一发炮弹的负载。 */
+    public static CannonPayload resolvePayload(ItemStack fillerStack, ItemStack cargoStack) {
+        BlockState fillerState = null;
+        int fillerCount = 0;
+        if (!fillerStack.isEmpty() && fillerStack.getItem() instanceof BlockItem blockItem) {
+            fillerState = blockItem.getBlock().defaultBlockState();
+            fillerCount = Math.min(fillerStack.getCount(), 64);
         }
-        if (isWaystoneItem(stack)) {
-            String name = stack.hasCustomHoverName() ? stack.getHoverName().getString() : null;
-            // 记下具体是哪种石碑：背包里放的是苔石版，落地就该是苔石版
-            BlockState style = stack.getItem() instanceof BlockItem blockItem
-                    ? blockItem.getBlock().defaultBlockState()
-                    : null;
-            return CannonPayload.waystone(name, style);
-        }
-        if (stack.is(Items.HAY_BLOCK)) {
-            return CannonPayload.hay();
-        }
-        if (stack.is(Items.WATER_BUCKET)) {
-            return CannonPayload.water();
-        }
-        // TNT 也是 BlockItem，必须排在「任意方块 → 填充物」之前
-        if (stack.is(Items.TNT)) {
-            return CannonPayload.tnt();
-        }
-        if (stack.is(Items.ENDER_PEARL)) {
-            return CannonPayload.enderPearl();
-        }
-        if (isWarpPlateItem(stack)) {
-            return CannonPayload.warpPlate();
-        }
-        if (stack.getItem() instanceof BlockItem blockItem) {
-            return CannonPayload.filler(blockItem.getBlock().defaultBlockState(), Math.min(stack.getCount(), 64));
-        }
-        return CannonPayload.NONE;
-    }
 
+        CannonPayload.Cargo cargo = CannonPayload.Cargo.NONE;
+        String cargoName = null;
+        BlockState cargoState = null;
+        if (isWaystoneItem(cargoStack)) {
+            cargo = CannonPayload.Cargo.WAYSTONE;
+            cargoName = cargoStack.hasCustomHoverName() ? cargoStack.getHoverName().getString() : null;
+            if (cargoStack.getItem() instanceof BlockItem blockItem) {
+                cargoState = blockItem.getBlock().defaultBlockState();
+            }
+        } else if (cargoStack.is(Items.TNT)) {
+            cargo = CannonPayload.Cargo.TNT;
+        } else if (cargoStack.is(Items.ENDER_PEARL)) {
+            cargo = CannonPayload.Cargo.ENDER_PEARL;
+        } else if (isWarpPlateItem(cargoStack)) {
+            cargo = CannonPayload.Cargo.WARP_PLATE;
+        }
+        return CannonPayload.of(fillerState, fillerCount, cargo, cargoName, cargoState);
+    }
     private static boolean isWarpPlateItem(ItemStack stack) {
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
         return "waystones".equals(id.getNamespace()) && id.getPath().contains("warp_plate");
@@ -264,6 +279,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         tag.putInt("Yaw", yaw);
         tag.putInt("Charge", charge);
         tag.putLong("CooldownUntil", cooldownUntil);
+        tag.putString("Mode", mode.name());
     }
 
     @Override
@@ -276,6 +292,13 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         yaw = tag.contains("Yaw") ? tag.getInt("Yaw") : yaw;
         charge = tag.contains("Charge") ? tag.getInt("Charge") : charge;
         cooldownUntil = tag.getLong("CooldownUntil");
+        if (tag.contains("Mode")) {
+            try {
+                mode = FireMode.valueOf(tag.getString("Mode"));
+            } catch (IllegalArgumentException ignored) {
+                mode = FireMode.CONTACT;
+            }
+        }
     }
 
     // ---- 同步给客户端（渲染炮管角度） ----

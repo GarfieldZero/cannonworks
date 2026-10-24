@@ -3,6 +3,8 @@ package com.cannonworks.entity;
 import com.cannonworks.CannonWorks;
 import com.cannonworks.ballistics.Trajectory;
 import com.cannonworks.payload.CannonPayload;
+import com.cannonworks.payload.FireMode;
+import com.cannonworks.payload.PayloadDelivery;
 import com.cannonworks.payload.PayloadDelivery;
 import com.cannonworks.registry.ModEntities;
 import java.util.Comparator;
@@ -19,6 +21,7 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -62,8 +65,9 @@ public final class ShellManager {
     }
 
     /** 发射一发炮弹，返回飞行 id；之后完全由本管理器驱动，调用方不需要再管实体。 */
-    public static UUID launch(ServerLevel level, Trajectory trajectory, @Nullable UUID owner, CannonPayload payload) {
-        Flight flight = new Flight(UUID.randomUUID(), level, trajectory, owner, payload);
+    public static UUID launch(ServerLevel level, Trajectory trajectory, @Nullable UUID owner, CannonPayload payload,
+                              FireMode mode) {
+        Flight flight = new Flight(UUID.randomUUID(), level, trajectory, owner, payload, mode);
         FLIGHTS.put(flight.id, flight);
         spawnEntity(flight, trajectory.sampleAtTick(0));
         return flight.id;
@@ -126,6 +130,11 @@ public final class ShellManager {
             spawnEntity(flight, to);
         }
 
+        // 关键：Level.clip 读未加载区块会当成空气，炮弹会直接穿墙。
+        // 先把这一段的两个端点所在区块强制加载出来，再判定碰撞。
+        ensureChunkLoaded(flight.level, from);
+        ensureChunkLoaded(flight.level, to);
+
         HitResult hit = flight.level.clip(new ClipContext(
                 from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, flight.entity));
         if (hit.getType() != HitResult.Type.MISS) {
@@ -137,6 +146,11 @@ public final class ShellManager {
             flight.entity.setPos(to.x, to.y, to.z);
             flight.entity.setDeltaMovement(to.subtract(from));
         }
+    }
+
+    private static void ensureChunkLoaded(ServerLevel level, Vec3 at) {
+        BlockPos pos = BlockPos.containing(at);
+        level.getChunk(pos.getX() >> 4, pos.getZ() >> 4, ChunkStatus.FULL, true);
     }
 
     private static void spawnEntity(Flight flight, Vec3 at) {
@@ -163,7 +177,7 @@ public final class ShellManager {
         ServerPlayer owner = flight.owner != null
                 ? flight.level.getServer().getPlayerList().getPlayer(flight.owner)
                 : null;
-        String summary = PayloadDelivery.onImpact(flight.level, at, incoming, flight.payload, owner);
+        String summary = PayloadDelivery.onImpact(flight.level, at, incoming, flight.payload, flight.mode, owner);
 
         flight.level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, at.x, at.y, at.z, 1, 0.0, 0.0, 0.0, 0.0);
         flight.level.playSound(null, at.x, at.y, at.z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0f, 0.7f);
@@ -209,15 +223,18 @@ public final class ShellManager {
         private final Trajectory trajectory;
         private final UUID owner;
         private final CannonPayload payload;
+        private final FireMode mode;
         private int age;
         private CannonShellEntity entity;
 
-        private Flight(UUID id, ServerLevel level, Trajectory trajectory, UUID owner, CannonPayload payload) {
+        private Flight(UUID id, ServerLevel level, Trajectory trajectory, UUID owner, CannonPayload payload,
+                        FireMode mode) {
             this.id = id;
             this.level = level;
             this.trajectory = trajectory;
             this.owner = owner;
             this.payload = payload;
+            this.mode = mode;
         }
 
         public UUID id() {

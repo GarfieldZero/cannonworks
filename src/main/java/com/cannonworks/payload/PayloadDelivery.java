@@ -2,66 +2,121 @@ package com.cannonworks.payload;
 
 import com.cannonworks.impact.ImpactEffects;
 import com.cannonworks.integration.WaystoneDelivery;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.fml.ModList;
 
 /**
- * 落点效果：把「炮弹装了什么」变成世界里的变化。
+ * 落点效果：把「填充方块 + 货物 + 模式」变成世界里的变化。
  *
- * <p>三条硬规则（防刷）：</p>
+ * <p>执行顺序（两种模式共用后半段）：</p>
  * <ol>
- *   <li>负载在装填/发射时就已扣除，这里只负责「放」，不负责生成；</li>
- *   <li>填充方块的放置量永远 ≤ 装载量；</li>
- *   <li>弹坑炸掉的方块不掉落。</li>
+ *   <li><b>接触模式</b>先炸出弹坑；<b>空爆模式</b>跳过这一步；</li>
+ *   <li>铺填充方块（从坑底往上填，数量守恒）；</li>
+ *   <li>最后执行货物：石碑 / TNT / 末影珍珠 / 传送板。</li>
  * </ol>
+ *
+ * <p>被地形拦截时走的是同一套流程，所以「半路撞山」也能原地生成结构。</p>
  */
 public final class PayloadDelivery {
 
     private static final double CRATER_RADIUS = 3.0;
-    private static final int MAX_SUPPORT_DROP = 8;
+    private static final double TNT_RADIUS = 6.0;
+    private static final int MAX_SUPPORT_DROP = 16;
 
     private PayloadDelivery() {
     }
 
     /** 应用负载，返回一句给玩家/日志看的结果描述。 */
     public static String onImpact(ServerLevel level, Vec3 at, Vec3 incoming, CannonPayload payload,
-                                  @Nullable ServerPlayer owner) {
-        return switch (payload.type()) {
-            case NONE -> "弹坑 " + ImpactEffects.carveCrater(level, at, incoming, CRATER_RADIUS) + " 格";
-            case BUFFER_HAY -> hay(level, at);
-            case BUFFER_WATER -> water(level, at, incoming);
-            case FILLER -> filler(level, at, incoming, payload);
-            case WAYSTONE -> waystone(level, at, incoming, owner, payload);
+                                  FireMode mode, @Nullable ServerPlayer owner) {
+        StringBuilder result = new StringBuilder(mode.label());
+
+        if (mode == FireMode.CONTACT) {
+            result.append("，弹坑 ").append(ImpactEffects.carveCrater(level, at, incoming, CRATER_RADIUS)).append(" 格");
+        } else {
+            result.append("，不炸坑");
+        }
+
+        if (payload.hasFiller()) {
+            int placed = placeFiller(level, at, incoming, payload, mode);
+            result.append("，填充 ").append(placed).append("/").append(payload.fillerCount()).append(" 块");
+        }
+
+        if (payload.hasCargo()) {
+            result.append("；").append(applyCargo(level, at, incoming, payload, owner));
+        }
+        return result.toString();
+    }
+
+    /** 填充方块：从坑底往上铺，铺满装载量为止（不会凭空多出来）。 */
+    private static int placeFiller(ServerLevel level, Vec3 hit, Vec3 incoming, CannonPayload payload,
+                                   FireMode mode) {
+        Vec3 center = mode == FireMode.AIRBURST
+                ? groundPoint(level, hit)
+                : hit.subtract(safeNormalize(incoming).scale(0.5));
+        BlockPos centerPos = BlockPos.containing(center);
+        BlockState state = payload.fillerState();
+        int radius = (int) Math.ceil(CRATER_RADIUS + 1);
+
+        List<BlockPos> candidates = new ArrayList<>();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    BlockPos pos = centerPos.offset(dx, dy, dz);
+                    if (center.distanceTo(Vec3.atCenterOf(pos)) > CRATER_RADIUS + 0.8) {
+                        continue;
+                    }
+                    if (!level.getBlockState(pos).isAir()) {
+                        continue;
+                    }
+                    BlockPos below = pos.below();
+                    if (!level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)) {
+                        continue;
+                    }
+                    if (!state.canSurvive(level, pos)) {
+                        continue;
+                    }
+                    candidates.add(pos);
+                }
+            }
+        }
+        candidates.sort(Comparator.comparingInt((BlockPos pos) -> pos.getY())
+                .thenComparingDouble(pos -> pos.distSqr(centerPos)));
+
+        int placed = 0;
+        for (BlockPos pos : candidates) {
+            if (placed >= payload.fillerCount()) {
+                break;
+            }
+            level.setBlock(pos, state, 3);
+            placed++;
+        }
+        return placed;
+    }
+
+    private static String applyCargo(ServerLevel level, Vec3 at, Vec3 incoming, CannonPayload payload,
+                                     @Nullable ServerPlayer owner) {
+        return switch (payload.cargo()) {
+            case NONE -> "";
+            case WAYSTONE -> waystone(level, at, owner, payload);
             case TNT -> tnt(level, at, incoming);
-            case ENDER_PEARL -> enderPearl(level, at, incoming, owner);
+            case ENDER_PEARL -> enderPearl(level, at, owner);
             case WARP_PLATE -> warpPlate(level, at);
         };
     }
 
-    /** 传送板：软着陆，直接铺在落点地面上。 */
-    private static String warpPlate(ServerLevel level, Vec3 at) {
-        if (!ModList.get().isLoaded("waystones")) {
-            return "未安装传送石碑，传送板丢失";
-        }
-        BlockPos landing = ImpactEffects.findLanding(level, at, 3, 16);
-        if (landing == null) {
-            WaystoneDelivery.dropAsItem(level, at);
-            return "传送板：落点找不到平地，已作为物品掉出";
-        }
-        boolean ok = WaystoneDelivery.placeWarpPlate(level, landing);
-        return ok ? "传送板已部署 @ " + fmt(landing) : "传送板部署失败";
-    }
-
-    /** 爆破：半径翻倍，外加多组爆炸粒子与低频轰鸣。 */
+    /** 爆破：半径 6 的额外爆炸（接触模式下会和基础弹坑叠加）。 */
     private static String tnt(ServerLevel level, Vec3 at, Vec3 incoming) {
-        int carved = ImpactEffects.carveCrater(level, at, incoming, 6.0);
+        int carved = ImpactEffects.carveCrater(level, at, incoming, TNT_RADIUS);
         for (int i = 0; i < 8; i++) {
             double dx = (level.random.nextDouble() - 0.5) * 6.0;
             double dy = (level.random.nextDouble() - 0.5) * 4.0;
@@ -74,8 +129,28 @@ public final class PayloadDelivery {
         return "TNT 爆破 " + carved + " 格";
     }
 
-    /** 末影珍珠：把发射者直接传送到落点（飞行途中他还在炮位上）。 */
-    private static String enderPearl(ServerLevel level, Vec3 at, Vec3 incoming, @Nullable ServerPlayer owner) {
+    /** 特殊货物：把石碑立在落点，并给发射者激活。 */
+    private static String waystone(ServerLevel level, Vec3 at, @Nullable ServerPlayer owner, CannonPayload payload) {
+        if (!ModList.get().isLoaded("waystones")) {
+            return "未安装传送石碑，货物丢失";
+        }
+        BlockPos landing = ImpactEffects.findLanding(level, at, 5, 40);
+        if (landing == null) {
+            WaystoneDelivery.dropAsItem(level, at);
+            return "石碑立不起来，已作为物品掉在落点";
+        }
+        boolean ok = WaystoneDelivery.deliver(level, landing, owner, payload.cargoName(), payload.cargoBlockState());
+        String label = payload.cargoName() != null ? "「" + payload.cargoName() + "」" : "（默认名）";
+        if (!ok) {
+            return "石碑" + label + "放置失败";
+        }
+        return owner != null
+                ? "石碑" + label + "已放置并为你激活 @ " + fmt(landing)
+                : "石碑" + label + "已放置（无发射者）@ " + fmt(landing);
+    }
+
+    /** 末影珍珠：把发射者直接传送到落点。 */
+    private static String enderPearl(ServerLevel level, Vec3 at, @Nullable ServerPlayer owner) {
         BlockPos landing = ImpactEffects.findLanding(level, at, 3, 16);
         if (landing == null) {
             return "末影珍珠：落点找不到能站的位置";
@@ -91,106 +166,28 @@ public final class PayloadDelivery {
         return "末影珍珠把 " + owner.getName().getString() + " 送到 " + fmt(landing);
     }
 
-    /** 缓冲物·草垛：不炸坑，落点正下方一格换成草垛。 */
-    private static String hay(ServerLevel level, Vec3 at) {
-        BlockPos landing = ImpactEffects.findLanding(level, at, 2, MAX_SUPPORT_DROP);
-        if (landing == null) {
-            return "草垛投送失败（找不到支撑面）";
-        }
-        BlockPos below = landing.below();
-        level.setBlock(below, Blocks.HAY_BLOCK.defaultBlockState(), 3);
-        return "草垛铺在 " + fmt(below);
-    }
-
-    /** 缓冲物·水桶：不炸坑，水放在落点旁边（放正下方会被货物方块挤掉）。 */
-    private static String water(ServerLevel level, Vec3 at, Vec3 incoming) {
-        BlockPos landing = ImpactEffects.findLanding(level, at, 2, MAX_SUPPORT_DROP);
-        if (landing == null) {
-            return "水桶投送失败（找不到支撑面）";
-        }
-        Vec3 dir = incoming.lengthSqr() > 1.0E-6 ? incoming.normalize() : new Vec3(0.0, -1.0, 0.0);
-        int ox = 0;
-        int oz = 0;
-        if (Math.abs(dir.x) >= Math.abs(dir.z)) {
-            oz = dir.z >= 0 ? 1 : -1;
-        } else {
-            ox = dir.x >= 0 ? 1 : -1;
-        }
-        BlockPos waterPos = landing.offset(ox, 0, oz);
-        if (!level.getBlockState(waterPos).canBeReplaced()) {
-            waterPos = landing;
-        }
-        level.setBlock(waterPos, Blocks.WATER.defaultBlockState(), 3);
-        return "水放在 " + fmt(waterPos);
-    }
-
-    /** 填充物：正常炸坑，并把填充方块零散嵌进坑壁/坑底（空投建材）。 */
-    private static String filler(ServerLevel level, Vec3 at, Vec3 incoming, CannonPayload payload) {
-        int carved = ImpactEffects.carveCrater(level, at, incoming, CRATER_RADIUS);
-        int placed = scatterFiller(level, at, incoming, payload.blockState(), payload.fillerCount());
-        return "弹坑 " + carved + " 格，填充 " + placed + "/" + payload.fillerCount() + " 块";
-    }
-
-    private static int scatterFiller(ServerLevel level, Vec3 hit, Vec3 incoming, BlockState state, int max) {
-        Vec3 direction = incoming.lengthSqr() > 1.0E-6 ? incoming.normalize() : new Vec3(0.0, -1.0, 0.0);
-        Vec3 center = hit.subtract(direction.scale(0.5));
-        BlockPos centerPos = BlockPos.containing(center);
-        int r = (int) Math.ceil(CRATER_RADIUS);
-        int placed = 0;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    if (placed >= max) {
-                        return placed;
-                    }
-                    BlockPos pos = centerPos.offset(dx, dy, dz);
-                    if (center.distanceTo(Vec3.atCenterOf(pos)) > CRATER_RADIUS) {
-                        continue;
-                    }
-                    if (!level.getBlockState(pos).isAir()) {
-                        continue;
-                    }
-                    BlockPos below = pos.below();
-                    if (!level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)) {
-                        continue;
-                    }
-                    if (level.random.nextFloat() > 0.6f) {
-                        continue;
-                    }
-                    if (state.canSurvive(level, pos)) {
-                        level.setBlock(pos, state, 3);
-                        placed++;
-                    }
-                }
-            }
-        }
-        return placed;
-    }
-
-    /** 特殊负载：炸坑后把石碑立在坑底，并给发射者激活。 */
-    private static String waystone(ServerLevel level, Vec3 at, Vec3 incoming, @Nullable ServerPlayer owner,
-                                   CannonPayload payload) {
-        int carved = ImpactEffects.carveCrater(level, at, incoming, CRATER_RADIUS);
+    /** 传送板：软着陆部署。 */
+    private static String warpPlate(ServerLevel level, Vec3 at) {
         if (!ModList.get().isLoaded("waystones")) {
-            return "弹坑 " + carved + " 格，但未安装传送石碑，负载丢失";
+            return "未安装传送石碑，传送板丢失";
         }
-        // 水面/悬崖落点要往下找得多一些：11×11 范围、最深 40 格（够到海底）
-        BlockPos landing = ImpactEffects.findLanding(level, at, 5, 40);
+        BlockPos landing = ImpactEffects.findLanding(level, at, 3, 16);
         if (landing == null) {
             WaystoneDelivery.dropAsItem(level, at);
-            return "弹坑 " + carved + " 格，石碑立不起来（下方 40 格没有平面），已作为物品掉在落点";
+            return "传送板：落点找不到平地，已作为物品掉出";
         }
-        boolean ok = WaystoneDelivery.deliver(level, landing, owner, payload.customName(), payload.blockState());
-        String label = payload.customName() != null ? "「" + payload.customName() + "」" : "（默认名）";
-        String status;
-        if (!ok) {
-            status = "放置失败";
-        } else if (owner != null) {
-            status = "已放置并为你激活 @ " + fmt(landing);
-        } else {
-            status = "已放置（无发射者，未激活）@ " + fmt(landing);
-        }
-        return "弹坑 " + carved + " 格，传送石碑" + label + status;
+        return WaystoneDelivery.placeWarpPlate(level, landing)
+                ? "传送板已部署 @ " + fmt(landing)
+                : "传送板部署失败";
+    }
+
+    private static Vec3 groundPoint(ServerLevel level, Vec3 at) {
+        BlockPos landing = ImpactEffects.findLanding(level, at, 3, MAX_SUPPORT_DROP);
+        return landing == null ? at : Vec3.atBottomCenterOf(landing);
+    }
+
+    private static Vec3 safeNormalize(Vec3 vec) {
+        return vec.lengthSqr() > 1.0E-6 ? vec.normalize() : new Vec3(0.0, -1.0, 0.0);
     }
 
     private static String fmt(BlockPos pos) {

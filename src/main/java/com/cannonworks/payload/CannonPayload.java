@@ -6,106 +6,79 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * 一发炮弹装了什么。
  *
- * <p>按设计文档，落点栏位是<b>互斥</b>的：缓冲物（软投送）和填充物（硬投送）只能二选一，
- * 传送石碑属于「特殊负载」，单独占一类。</p>
+ * <p>拆成两部分（对应界面上的两个槽）：</p>
+ * <ul>
+ *   <li><b>填充方块</b>：任意方块，落地后在弹坑里铺出来，相当于空投建材；</li>
+ *   <li><b>货物</b>：有功能的物品（传送石碑 / TNT / 末影珍珠 / 传送板），最后执行。</li>
+ * </ul>
  *
- * @param customName 特殊负载的自定义名字（目前只有传送石碑用），null 表示用默认名
+ * @param fillerState     填充方块，null 表示不填
+ * @param fillerCount     填充数量
+ * @param cargo           货物类型
+ * @param cargoName       货物自定义名（目前只有石碑用）
+ * @param cargoBlockState 货物的方块形态（石碑的材质、传送板等），null 表示默认
  */
-public record CannonPayload(Type type, @Nullable BlockState blockState, int fillerCount,
-                            @Nullable String customName) {
+public record CannonPayload(@Nullable BlockState fillerState, int fillerCount, Cargo cargo,
+                            @Nullable String cargoName, @Nullable BlockState cargoBlockState) {
 
-    public static final CannonPayload NONE = new CannonPayload(Type.NONE, null, 0, null);
+    public static final CannonPayload EMPTY = new CannonPayload(null, 0, Cargo.NONE, null, null);
 
-    private static final int MAX_NAME_LENGTH = 32;
-
-    public enum Type {
-        /** 空：纯弹坑。 */
+    public enum Cargo {
         NONE,
-        /** 特殊负载：落地放一座传送石碑并给发射者激活。 */
+        /** 落地放一座传送石碑并给发射者激活。 */
         WAYSTONE,
-        /** 缓冲物·草垛：无弹坑，落点下方换成草垛。 */
-        BUFFER_HAY,
-        /** 缓冲物·水桶：无弹坑，落点旁边放水。 */
-        BUFFER_WATER,
-        /** 填充物：有弹坑，填充方块零散嵌在坑里，相当于空投建材。 */
-        FILLER,
-        /** 爆破：大半径弹坑 + 强化爆炸表现。 */
+        /** 落地大爆破。 */
         TNT,
-        /** 末影珍珠：把发射者直接传送到落点。 */
+        /** 落地把发射者传送过去。 */
         ENDER_PEARL,
-        /** 传送板：落地部署一块传送板。 */
+        /** 落地部署一块传送板。 */
         WARP_PLATE
     }
 
-    public static CannonPayload waystone() {
-        return new CannonPayload(Type.WAYSTONE, null, 0, null);
+    public static CannonPayload of(@Nullable BlockState fillerState, int fillerCount, Cargo cargo,
+                                   @Nullable String cargoName, @Nullable BlockState cargoBlockState) {
+        int count = fillerState == null ? 0 : Math.max(0, Math.min(64, fillerCount));
+        return new CannonPayload(count > 0 ? fillerState : null, count, cargo, cargoName, cargoBlockState);
     }
 
-    public static CannonPayload waystone(@Nullable String name) {
-        return new CannonPayload(Type.WAYSTONE, null, 0, sanitize(name));
+    public static CannonPayload of(@Nullable BlockState fillerState, int fillerCount, Cargo cargo,
+                                   @Nullable String cargoName) {
+        return of(fillerState, fillerCount, cargo, cargoName, null);
     }
 
-    /**
-     * @param state 具体是哪种石碑（原版/苔石/沙岩/黑石/深板岩/末地石…），
-     *              由装填的物品决定；null 表示没指定，走默认样式
-     */
-    public static CannonPayload waystone(@Nullable String name, @Nullable BlockState state) {
-        return new CannonPayload(Type.WAYSTONE, state, 0, sanitize(name));
-    }
-
-    public static CannonPayload hay() {
-        return new CannonPayload(Type.BUFFER_HAY, null, 0, null);
-    }
-
-    public static CannonPayload water() {
-        return new CannonPayload(Type.BUFFER_WATER, null, 0, null);
+    public static CannonPayload cargo(Cargo cargo, @Nullable String name, @Nullable BlockState blockState) {
+        return new CannonPayload(null, 0, cargo, name, blockState);
     }
 
     public static CannonPayload filler(BlockState state, int count) {
-        return new CannonPayload(Type.FILLER, state, Math.max(1, count), null);
+        return of(state, count, Cargo.NONE, null, null);
     }
 
-    public static CannonPayload tnt() {
-        return new CannonPayload(Type.TNT, null, 0, null);
+    public boolean hasFiller() {
+        return fillerState != null && fillerCount > 0;
     }
 
-    public static CannonPayload enderPearl() {
-        return new CannonPayload(Type.ENDER_PEARL, null, 0, null);
-    }
-
-    public static CannonPayload warpPlate() {
-        return new CannonPayload(Type.WARP_PLATE, null, 0, null);
+    public boolean hasCargo() {
+        return cargo != Cargo.NONE;
     }
 
     public String describe() {
-        return switch (type) {
-            case NONE -> "空";
-            case WAYSTONE -> customName != null ? "传送石碑「" + customName + "」" : "传送石碑";
-            case BUFFER_HAY -> "缓冲物·草垛";
-            case BUFFER_WATER -> "缓冲物·水桶";
-            case FILLER -> "填充物 " + blockState.getBlock().getName().getString() + " ×" + fillerCount;
-            case TNT -> "TNT 爆破";
-            case ENDER_PEARL -> "末影珍珠";
-            case WARP_PLATE -> "传送板";
-        };
-    }
-
-    /** 去掉控制字符和包裹的引号、裁掉首尾空白，空串当没填，最长 32 字。 */
-    @Nullable
-    private static String sanitize(@Nullable String name) {
-        if (name == null) {
-            return null;
+        StringBuilder sb = new StringBuilder();
+        if (hasFiller()) {
+            sb.append("填充 ").append(fillerState.getBlock().getName().getString()).append(" ×").append(fillerCount);
         }
-        String cleaned = name.trim();
-        if (cleaned.length() >= 2
-                && ((cleaned.startsWith("'") && cleaned.endsWith("'"))
-                || (cleaned.startsWith("\"") && cleaned.endsWith("\"")))) {
-            cleaned = cleaned.substring(1, cleaned.length() - 1);
+        if (hasCargo()) {
+            if (sb.length() > 0) {
+                sb.append(" + ");
+            }
+            sb.append(switch (cargo) {
+                case NONE -> "";
+                case WAYSTONE -> cargoName != null ? "传送石碑「" + cargoName + "」" : "传送石碑";
+                case TNT -> "TNT";
+                case ENDER_PEARL -> "末影珍珠";
+                case WARP_PLATE -> "传送板";
+            });
         }
-        cleaned = cleaned.replaceAll("\\p{Cntrl}", "").trim();
-        if (cleaned.isEmpty()) {
-            return null;
-        }
-        return cleaned.length() > MAX_NAME_LENGTH ? cleaned.substring(0, MAX_NAME_LENGTH) : cleaned;
+        return sb.length() == 0 ? "空" : sb.toString();
     }
 }
