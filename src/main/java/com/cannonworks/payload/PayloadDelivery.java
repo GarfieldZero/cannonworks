@@ -112,7 +112,7 @@ public final class PayloadDelivery {
     /** 填充物：正常炸坑，并把填充方块零散嵌进坑壁/坑底（空投建材）。 */
     private static String filler(ServerLevel level, Vec3 at, Vec3 incoming, CannonPayload payload) {
         int carved = ImpactEffects.carveCrater(level, at, incoming, CRATER_RADIUS);
-        int placed = scatterFiller(level, at, incoming, payload.fillerState(), payload.fillerCount());
+        int placed = scatterFiller(level, at, incoming, payload.blockState(), payload.fillerCount());
         return "弹坑 " + carved + " 格，填充 " + placed + "/" + payload.fillerCount() + " 块";
     }
 
@@ -165,7 +165,7 @@ public final class PayloadDelivery {
             WaystoneDelivery.dropAsItem(level, at);
             return "弹坑 " + carved + " 格，石碑立不起来（下方 40 格没有平面），已作为物品掉在落点";
         }
-        boolean ok = WaystoneDelivery.deliver(level, landing, owner, payload.customName());
+        boolean ok = WaystoneDelivery.deliver(level, landing, owner, payload.customName(), payload.blockState());
         String label = payload.customName() != null ? "「" + payload.customName() + "」" : "（默认名）";
         String status;
         if (!ok) {

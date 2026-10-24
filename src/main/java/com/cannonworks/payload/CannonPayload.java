@@ -11,7 +11,7 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * @param customName 特殊负载的自定义名字（目前只有传送石碑用），null 表示用默认名
  */
-public record CannonPayload(Type type, @Nullable BlockState fillerState, int fillerCount,
+public record CannonPayload(Type type, @Nullable BlockState blockState, int fillerCount,
                             @Nullable String customName) {
 
     public static final CannonPayload NONE = new CannonPayload(Type.NONE, null, 0, null);
@@ -43,6 +43,14 @@ public record CannonPayload(Type type, @Nullable BlockState fillerState, int fil
         return new CannonPayload(Type.WAYSTONE, null, 0, sanitize(name));
     }
 
+    /**
+     * @param state 具体是哪种石碑（原版/苔石/沙岩/黑石/深板岩/末地石…），
+     *              由装填的物品决定；null 表示没指定，走默认样式
+     */
+    public static CannonPayload waystone(@Nullable String name, @Nullable BlockState state) {
+        return new CannonPayload(Type.WAYSTONE, state, 0, sanitize(name));
+    }
+
     public static CannonPayload hay() {
         return new CannonPayload(Type.BUFFER_HAY, null, 0, null);
     }
@@ -69,7 +77,7 @@ public record CannonPayload(Type type, @Nullable BlockState fillerState, int fil
             case WAYSTONE -> customName != null ? "传送石碑「" + customName + "」" : "传送石碑";
             case BUFFER_HAY -> "缓冲物·草垛";
             case BUFFER_WATER -> "缓冲物·水桶";
-            case FILLER -> "填充物 " + fillerState.getBlock().getName().getString() + " ×" + fillerCount;
+            case FILLER -> "填充物 " + blockState.getBlock().getName().getString() + " ×" + fillerCount;
             case TNT -> "TNT 爆破";
             case ENDER_PEARL -> "末影珍珠";
         };

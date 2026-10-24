@@ -188,7 +188,11 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         }
         if (isWaystoneItem(stack)) {
             String name = stack.hasCustomHoverName() ? stack.getHoverName().getString() : null;
-            return CannonPayload.waystone(name);
+            // 记下具体是哪种石碑：背包里放的是苔石版，落地就该是苔石版
+            BlockState style = stack.getItem() instanceof BlockItem blockItem
+                    ? blockItem.getBlock().defaultBlockState()
+                    : null;
+            return CannonPayload.waystone(name, style);
         }
         if (stack.is(Items.HAY_BLOCK)) {
             return CannonPayload.hay();
@@ -212,7 +216,8 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     /** 不硬依赖 Waystones：按注册名判断，避免类加载。 */
     private static boolean isWaystoneItem(ItemStack stack) {
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        return "waystones".equals(id.getNamespace()) && id.getPath().contains("waystone");
+        return "waystones".equals(id.getNamespace())
+                && (id.getPath().contains("waystone") || id.getPath().contains("sharestone"));
     }
 
     public void dropContents() {

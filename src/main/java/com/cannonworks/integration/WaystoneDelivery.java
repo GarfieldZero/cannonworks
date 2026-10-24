@@ -5,6 +5,8 @@ import javax.annotation.Nullable;
 import com.cannonworks.CannonWorks;
 import net.blay09.mods.waystones.api.IMutableWaystone;
 import net.blay09.mods.waystones.api.IWaystone;
+import net.blay09.mods.waystones.api.WaystoneStyle;
+import net.blay09.mods.waystones.block.SharestoneBlock;
 import net.blay09.mods.waystones.api.WaystoneStyles;
 import net.blay09.mods.waystones.api.WaystonesAPI;
 import net.blay09.mods.waystones.core.PlayerWaystoneManager;
@@ -13,6 +15,7 @@ import net.blay09.mods.waystones.core.WaystoneSyncManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * 「把一座传送石碑送到落点」——全部 Waystones 类型都收敛在这里。
@@ -28,10 +31,21 @@ public final class WaystoneDelivery {
      * 在指定位置放一座石碑，并为发射者激活。
      *
      * @param customName 自定义名字，null/空白则用「空投点 x, z」
+     * @param styleBlock 具体石碑方块（苔石/沙岩/黑石…），null 用默认样式
      * @return 是否成功放下
      */
     public static boolean deliver(ServerLevel level, BlockPos pos, @Nullable ServerPlayer owner,
-                                  @Nullable String customName) {        Optional<IWaystone> placed = WaystonesAPI.placeWaystone(level, pos, WaystoneStyles.DEFAULT);
+                                  @Nullable String customName, @Nullable BlockState styleBlock) {
+        Optional<IWaystone> placed;
+        if (styleBlock != null && styleBlock.getBlock() instanceof SharestoneBlock sharestone) {
+            // 分享石走另一套 API：颜色是方块自带属性，不是 WaystoneStyle
+            placed = WaystonesAPI.placeSharestone(level, pos, sharestone.getColor());
+        } else {
+            WaystoneStyle style = styleBlock != null
+                    ? WaystoneStyles.getStyle(styleBlock.getBlock())
+                    : WaystoneStyles.DEFAULT;
+            placed = WaystonesAPI.placeWaystone(level, pos, style);
+        }
         if (placed.isEmpty()) {
             return false;
         }
