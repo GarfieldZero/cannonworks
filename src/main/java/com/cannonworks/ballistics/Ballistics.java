@@ -27,6 +27,17 @@ public final class Ballistics {
     }
 
     /**
+     * 俯仰角对火药效率的修正系数：45 度为 1，每偏离 1 度变化 1/90。
+     *
+     * <p>低抛更省药（5 度约 1.44 倍射程），高抛更费药（85 度约 0.56 倍）。
+     * 这样「俯仰」不再只改弹道形状，也参与射程计算——高抛拿射程换高度。</p>
+     */
+    public static double pitchEfficiency(double pitchDeg) {
+        double clamped = Mth.clamp(pitchDeg, MIN_PITCH, MAX_PITCH);
+        return Mth.clamp(1.0 - (clamped - 45.0) / 90.0, 0.5, 1.5);
+    }
+
+    /**
      * 顶点高度：沿用真实抛物线里 apex/range = tanθ/4 的比例。
      * 15° 打 10000 格 → 670 格；45° → 2500 格；超过 3000 才夹住。
      *

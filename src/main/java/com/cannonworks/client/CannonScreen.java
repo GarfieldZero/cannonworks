@@ -116,7 +116,10 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         double dx = (targetX + 0.5) - (pos.getX() + 0.5);
         double dz = (targetZ + 0.5) - (pos.getZ() + 0.5);
         double range = Math.sqrt(dx * dx + dz * dz);
-        int charge = (int) Math.ceil(range / CannonBlockEntity.RANGE_PER_CHARGE);
+        // 俯仰角先由玩家选，解算按该角度的火药效率反推装药
+        int pitch = pitchSlider.intValue();
+        double efficiency = com.cannonworks.ballistics.Ballistics.pitchEfficiency(pitch);
+        int charge = (int) Math.ceil(range / (CannonBlockEntity.RANGE_PER_CHARGE * efficiency));
         if (charge > CannonBlockEntity.MAX_CHARGE) {
             charge = CannonBlockEntity.MAX_CHARGE;
             if (minecraft != null && minecraft.player != null) {
@@ -126,8 +129,6 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         }
         int yaw = (int) Math.round(Math.toDegrees(Math.atan2(-dx, dz)));
         yaw = Math.floorMod(yaw, 360);
-        // 解算同时给出俯仰：默认 45 度（高低抛仍可解算后手动调整，只改弹道形状不改落点）
-        int pitch = 45;
 
         CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(pos, pitch, yaw, charge, currentMode()));
         pitchSlider.setLocal(pitch);

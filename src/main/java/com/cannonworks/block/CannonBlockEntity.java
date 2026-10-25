@@ -115,8 +115,18 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         return (int) Math.max(0, cooldownUntil - level.getGameTime());
     }
 
+    /** 俯仰角会影响火药效率：低抛省药、高抛费药。 */
+    public double getRangeExact() {
+        return getRangeExact(charge);
+    }
+
+    public double getRangeExact(int usedCharge) {
+        double efficiency = Ballistics.pitchEfficiency(pitch);
+        return Math.min(usedCharge * (double) RANGE_PER_CHARGE * efficiency, Ballistics.MAX_RANGE);
+    }
+
     public int getRange() {
-        return Math.min(charge * RANGE_PER_CHARGE, (int) Ballistics.MAX_RANGE);
+        return (int) Math.round(getRangeExact());
     }
 
     public int getFlightTicks() {
@@ -173,7 +183,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
         Vec3 direction = Vec3.directionFromRotation(0.0f, yaw);
         Vec3 origin = Vec3.atCenterOf(worldPosition).add(0.0, 0.9, 0.0).add(direction.scale(1.6));
-        double range = Math.min(usedPowder * (double) RANGE_PER_CHARGE, Ballistics.MAX_RANGE);
+        double range = getRangeExact(usedPowder);
         Vec3 target = origin.add(direction.scale(range));
         Trajectory trajectory = Ballistics.create(origin, target, pitch);
 
