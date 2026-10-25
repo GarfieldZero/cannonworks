@@ -22,6 +22,11 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class ImpactEffects {
 
+    /** 空位 = 空气 / 可替换方块 / 流体。水不能算墙。 */
+    private static boolean isOpen(BlockState state) {
+        return state.isAir() || state.canBeReplaced() || !state.getFluidState().isEmpty();
+    }
+
     /** 单发最多削掉多少方块，防止一发把服务器卡死。 */
     private static final int MAX_BLOCKS = 512;
 
@@ -60,7 +65,7 @@ public final class ImpactEffects {
                         continue;
                     }
                     BlockState state = level.getBlockState(pos);
-                    if (state.isAir()) {
+                    if (isOpen(state)) {
                         continue;
                     }
                     // 容器/方块实体先不动：防刷，也防止把别人的箱子炸了（M2 再做配置）
@@ -112,7 +117,7 @@ public final class ImpactEffects {
                     continue;
                 }
                 BlockState current = level.getBlockState(next);
-                if (!current.isAir() && !current.canBeReplaced()) {
+                if (!isOpen(current)) {
                     continue;
                 }
                 cells.add(next);
@@ -136,7 +141,7 @@ public final class ImpactEffects {
                     continue;
                 }
                 BlockState current = level.getBlockState(pos);
-                if (!current.isAir() && !current.canBeReplaced()) {
+                if (!isOpen(current)) {
                     continue;
                 }
                 if (!state.canSurvive(level, pos)) {
@@ -166,7 +171,7 @@ public final class ImpactEffects {
                         continue;
                     }
                     BlockState state = level.getBlockState(pos);
-                    if (!state.isAir() && !state.canBeReplaced()) {
+                    if (!isOpen(state)) {
                         continue;
                     }
                     double score = pos.distSqr(center);
@@ -220,7 +225,7 @@ public final class ImpactEffects {
                         continue;
                     }
                     BlockPos landing = pos.above();
-                    if (level.isEmptyBlock(landing) && level.isEmptyBlock(landing.above())) {
+                    if (isOpen(level.getBlockState(landing)) && isOpen(level.getBlockState(landing.above()))) {
                         double score = base.distSqr(landing);
                         if (score < bestScore) {
                             bestScore = score;
