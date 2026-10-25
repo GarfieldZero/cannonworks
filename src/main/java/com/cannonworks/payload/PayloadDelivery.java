@@ -84,7 +84,7 @@ public final class PayloadDelivery {
             case WAYSTONE -> waystone(level, at, owner, payload);
             case TNT -> tnt(level, at);
             case ENDER_PEARL -> enderPearl(level, at, owner);
-            case WARP_PLATE -> warpPlate(level, at);
+            case WARP_PLATE -> warpPlate(level, at, payload);
             case WATER -> fluid(level, at, net.minecraft.world.level.block.Blocks.WATER.defaultBlockState(), "水");
             case LAVA -> fluid(level, at, net.minecraft.world.level.block.Blocks.LAVA.defaultBlockState(), "岩浆");
         };
@@ -115,6 +115,7 @@ public final class PayloadDelivery {
             WaystoneDelivery.dropAsItem(level, at);
             return "石碑立不起来，已作为物品掉在落点";
         }
+        landing = embedIntoFiller(level, landing, payload);
         boolean ok = WaystoneDelivery.deliver(level, landing, owner, payload.cargoName(), payload.cargoBlockState());
         String label = payload.cargoName() != null ? "「" + payload.cargoName() + "」" : "（默认名）";
         if (!ok) {
@@ -163,7 +164,7 @@ public final class PayloadDelivery {
     }
 
     /** 传送板：软着陆部署。 */
-    private static String warpPlate(ServerLevel level, Vec3 at) {
+    private static String warpPlate(ServerLevel level, Vec3 at, CannonPayload payload) {
         if (!ModList.get().isLoaded("waystones")) {
             return "未安装传送石碑，传送板丢失";
         }
@@ -172,9 +173,24 @@ public final class PayloadDelivery {
             WaystoneDelivery.dropAsItem(level, at);
             return "传送板：落点找不到平地，已作为物品掉出";
         }
+        landing = embedIntoFiller(level, landing, payload);
         return WaystoneDelivery.placeWarpPlate(level, landing)
                 ? "传送板已部署 @ " + fmt(landing)
                 : "传送板部署失败";
+    }
+
+    /** 有填充时把货物往下嵌一层，挖出两格空间，让它长在方块堆里面而不是顶上。 */
+    private static BlockPos embedIntoFiller(ServerLevel level, BlockPos landing, CannonPayload payload) {
+        if (!payload.hasFiller()) {
+            return landing;
+        }
+        BlockPos embedded = landing.below();
+        if (level.getBlockState(embedded).getBlock() != payload.fillerState().getBlock()) {
+            return landing;
+        }
+        level.setBlock(embedded, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+        level.setBlock(embedded.above(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+        return embedded;
     }
 
     private static Vec3 groundPoint(ServerLevel level, Vec3 at) {
