@@ -99,7 +99,13 @@ public final class CannonCommand {
                                         CannonPayload.Cargo.ENDER_PEARL, null, null))))
                         .then(Commands.literal("warpplate")
                                 .then(launchBranch(context -> CannonPayload.cargo(
-                                        CannonPayload.Cargo.WARP_PLATE, null, null)))))
+                                        CannonPayload.Cargo.WARP_PLATE, null, null))))
+                        .then(Commands.literal("water")
+                                .then(launchBranch(context -> CannonPayload.cargo(
+                                        CannonPayload.Cargo.WATER, null, null))))
+                        .then(Commands.literal("lava")
+                                .then(launchBranch(context -> CannonPayload.cargo(
+                                        CannonPayload.Cargo.LAVA, null, null)))))
                 .then(Commands.literal("fill")
                         .then(Commands.argument("block", BlockStateArgument.block(buildContext))
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))

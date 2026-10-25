@@ -32,7 +32,11 @@ public record CannonPayload(@Nullable BlockState fillerState, int fillerCount, C
         /** 落地把发射者传送过去。 */
         ENDER_PEARL,
         /** 落地部署一块传送板。 */
-        WARP_PLATE
+        WARP_PLATE,
+        /** 落地泼一片水。 */
+        WATER,
+        /** 落地泼一片岩浆。 */
+        LAVA
     }
 
     public static CannonPayload of(@Nullable BlockState fillerState, int fillerCount, Cargo cargo,
@@ -77,6 +81,8 @@ public record CannonPayload(@Nullable BlockState fillerState, int fillerCount, C
                 case TNT -> "TNT";
                 case ENDER_PEARL -> "末影珍珠";
                 case WARP_PLATE -> "传送板";
+                case WATER -> "水桶";
+                case LAVA -> "岩浆桶";
             });
         }
         return sb.length() == 0 ? "空" : sb.toString();

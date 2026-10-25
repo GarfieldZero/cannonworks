@@ -27,6 +27,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -208,9 +209,17 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     public static CannonPayload resolvePayload(ItemStack fillerStack, ItemStack cargoStack) {
         BlockState fillerState = null;
         int fillerCount = 0;
-        if (!fillerStack.isEmpty() && fillerStack.getItem() instanceof BlockItem blockItem) {
-            fillerState = blockItem.getBlock().defaultBlockState();
-            fillerCount = Math.min(fillerStack.getCount(), 64);
+        if (!fillerStack.isEmpty()) {
+            if (fillerStack.getItem() instanceof BlockItem blockItem) {
+                fillerState = blockItem.getBlock().defaultBlockState();
+                fillerCount = Math.min(fillerStack.getCount(), 64);
+            } else if (fillerStack.is(Items.WATER_BUCKET)) {
+                fillerState = Blocks.WATER.defaultBlockState();
+                fillerCount = Math.min(fillerStack.getCount(), 16);
+            } else if (fillerStack.is(Items.LAVA_BUCKET)) {
+                fillerState = Blocks.LAVA.defaultBlockState();
+                fillerCount = Math.min(fillerStack.getCount(), 16);
+            }
         }
 
         CannonPayload.Cargo cargo = CannonPayload.Cargo.NONE;
@@ -228,9 +237,32 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
             cargo = CannonPayload.Cargo.ENDER_PEARL;
         } else if (isWarpPlateItem(cargoStack)) {
             cargo = CannonPayload.Cargo.WARP_PLATE;
+        } else if (cargoStack.is(Items.WATER_BUCKET)) {
+            cargo = CannonPayload.Cargo.WATER;
+        } else if (cargoStack.is(Items.LAVA_BUCKET)) {
+            cargo = CannonPayload.Cargo.LAVA;
         }
         return CannonPayload.of(fillerState, fillerCount, cargo, cargoName, cargoState);
     }
+    /** Filler slot accepts blocks and fluid buckets. */
+    public static boolean isValidFiller(ItemStack stack) {
+        return stack.isEmpty()
+                || stack.getItem() instanceof BlockItem
+                || stack.is(Items.WATER_BUCKET)
+                || stack.is(Items.LAVA_BUCKET);
+    }
+
+    /** Cargo slot only accepts functional items. */
+    public static boolean isValidCargo(ItemStack stack) {
+        return stack.isEmpty()
+                || stack.is(Items.TNT)
+                || stack.is(Items.ENDER_PEARL)
+                || stack.is(Items.WATER_BUCKET)
+                || stack.is(Items.LAVA_BUCKET)
+                || isWaystoneItem(stack)
+                || isWarpPlateItem(stack);
+    }
+
     private static boolean isWarpPlateItem(ItemStack stack) {
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
         return "waystones".equals(id.getNamespace()) && id.getPath().contains("warp_plate");

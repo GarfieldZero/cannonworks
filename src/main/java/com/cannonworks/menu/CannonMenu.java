@@ -2,6 +2,8 @@ package com.cannonworks.menu;
 
 import com.cannonworks.block.CannonBlockEntity;
 import com.cannonworks.payload.FireMode;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import com.cannonworks.registry.ModMenus;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -67,9 +69,24 @@ public class CannonMenu extends AbstractContainerMenu {
         };
 
         // 机器区：左侧两个槽（火药 / 负载），坐标与 CannonScreen 的排版一一对应
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PROPELLANT, 30, 24));
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_FILLER, 30, 52));
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_CARGO, 30, 80));
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PROPELLANT, 30, 24) {
+            @Override
+            public boolean mayPlace(ItemStack stack) {
+                return stack.is(Items.GUNPOWDER);
+            }
+        });
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_FILLER, 30, 52) {
+            @Override
+            public boolean mayPlace(ItemStack stack) {
+                return CannonBlockEntity.isValidFiller(stack);
+            }
+        });
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_CARGO, 30, 80) {
+            @Override
+            public boolean mayPlace(ItemStack stack) {
+                return CannonBlockEntity.isValidCargo(stack);
+            }
+        });
 
         // 玩家背包与快捷栏：整体下移到 y=140 / y=198，给上面的信息区和点火按钮留出空间
         for (int row = 0; row < 3; row++) {

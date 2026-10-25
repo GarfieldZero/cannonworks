@@ -85,6 +85,8 @@ public final class PayloadDelivery {
             case TNT -> tnt(level, at);
             case ENDER_PEARL -> enderPearl(level, at, owner);
             case WARP_PLATE -> warpPlate(level, at);
+            case WATER -> fluid(level, at, net.minecraft.world.level.block.Blocks.WATER.defaultBlockState(), "水");
+            case LAVA -> fluid(level, at, net.minecraft.world.level.block.Blocks.LAVA.defaultBlockState(), "岩浆");
         };
     }
 
@@ -138,6 +140,26 @@ public final class PayloadDelivery {
         owner.resetFallDistance();
         owner.invulnerableTime = 40;
         return "末影珍珠把 " + owner.getName().getString() + " 送到 " + fmt(landing);
+    }
+
+    /** 液体货物：在落点泼一片（会按原版流体规则流动）。 */
+    private static String fluid(ServerLevel level, Vec3 at, BlockState state, String label) {
+        BlockPos landing = ImpactEffects.findLanding(level, at, 3, 16);
+        BlockPos base = landing != null ? landing : BlockPos.containing(at);
+        int placed = 0;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                if (dx * dx + dz * dz > 5) {
+                    continue;
+                }
+                BlockPos pos = base.offset(dx, 0, dz);
+                if (level.getBlockState(pos).canBeReplaced()) {
+                    level.setBlock(pos, state, 3);
+                    placed++;
+                }
+            }
+        }
+        return label + "泼洒 " + placed + " 格 @ " + fmt(base);
     }
 
     /** 传送板：软着陆部署。 */
