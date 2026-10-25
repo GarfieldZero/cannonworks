@@ -53,6 +53,11 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
     private AimSlider chargeSlider;
     private AimSlider activeSlider;
     private Button modeButton;
+    private int lockX = Integer.MIN_VALUE;
+    private int lockZ = Integer.MIN_VALUE;
+    private ChangeSource pendingChange = ChangeSource.NONE;
+
+    private enum ChangeSource { NONE, PITCH, YAW, CHARGE }
     private EditBox targetXBox;
     private EditBox targetZBox;
     /** 本地刚改过值时，先别被服务端的旧数据回拉。 */
@@ -70,11 +75,12 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         super.init();
         int x = leftPos + SLIDER_X;
         pitchSlider = new AimSlider(x, topPos + ROW_PITCH, SLIDER_WIDTH, "俯仰", "°",
-                5, 85, menu.getData(CannonMenu.DATA_PITCH), v -> sendAim());
+                5, 85, menu.getData(CannonMenu.DATA_PITCH), v -> onSlider(ChangeSource.PITCH));
         yawSlider = new AimSlider(x, topPos + ROW_YAW, SLIDER_WIDTH, "方位", "°",
-                0, 359, menu.getData(CannonMenu.DATA_YAW), v -> sendAim());
+                0, 359, menu.getData(CannonMenu.DATA_YAW), v -> onSlider(ChangeSource.YAW));
         chargeSlider = new AimSlider(x, topPos + ROW_CHARGE, SLIDER_WIDTH, "装药", "",
-                0, CannonBlockEntity.MAX_CHARGE, menu.getData(CannonMenu.DATA_CHARGE), v -> sendAim());
+                0, CannonBlockEntity.MAX_CHARGE, menu.getData(CannonMenu.DATA_CHARGE),
+                v -> onSlider(ChangeSource.CHARGE));
 
         addRenderableWidget(pitchSlider);
         addRenderableWidget(yawSlider);
@@ -118,6 +124,8 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         double range = Math.sqrt(dx * dx + dz * dz);
         // 俯仰角先由玩家选，解算按该角度的火药效率反推装药
         int pitch = pitchSlider.intValue();
+        lockX = targetX;
+        lockZ = targetZ;
         double efficiency = com.cannonworks.ballistics.Ballistics.pitchEfficiency(pitch);
         int charge = (int) Math.ceil(range / (CannonBlockEntity.RANGE_PER_CHARGE * efficiency));
         if (charge > CannonBlockEntity.MAX_CHARGE) {
@@ -148,7 +156,62 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         }
     }
 
+    private void onSlider(ChangeSource source) {
+        pendingChange = source;
+        sendAim();
+    }
+
+    private double lockDistance() {
+        BlockPos pos = menu.getBlockEntity().getBlockPos();
+        double dx = (lockX + 0.5) - (pos.getX() + 0.5);
+        double dz = (lockZ + 0.5) - (pos.getZ() + 0.5);
+        return Math.sqrt(dx * dx + dz * dz);
+    }
+
+    private boolean locked() {
+        return lockX != Integer.MIN_VALUE;
+    }
+
+    /** Keep the locked distance: recompute charge from the new pitch. */
+    private void applyChargeForLock() {
+        double distance = lockDistance();
+        double efficiency = com.cannonworks.ballistics.Ballistics.pitchEfficiency(pitchSlider.intValue());
+        int charge = (int) Math.ceil(distance / (CannonBlockEntity.RANGE_PER_CHARGE * efficiency));
+        chargeSlider.setLocal(Math.max(0, Math.min(CannonBlockEntity.MAX_CHARGE, charge)));
+    }
+
+    /** Keep the locked distance: recompute pitch from the new charge. */
+    private void applyPitchForLock() {
+        int charge = chargeSlider.intValue();
+        if (charge <= 0) {
+            return;
+        }
+        double distance = lockDistance();
+        double efficiency = distance / (CannonBlockEntity.RANGE_PER_CHARGE * (double) charge);
+        double cosPitch = efficiency * Math.cos(Math.toRadians(45.0));
+        int pitch;
+        if (cosPitch >= Math.cos(Math.toRadians(com.cannonworks.ballistics.Ballistics.MIN_PITCH))) {
+            pitch = (int) com.cannonworks.ballistics.Ballistics.MIN_PITCH;
+        } else if (cosPitch <= Math.cos(Math.toRadians(com.cannonworks.ballistics.Ballistics.MAX_PITCH))) {
+            pitch = (int) com.cannonworks.ballistics.Ballistics.MAX_PITCH;
+        } else {
+            pitch = (int) Math.round(Math.toDegrees(Math.acos(cosPitch)));
+        }
+        pitchSlider.setLocal(pitch);
+    }
+
     private void sendAim() {
+        if (locked()) {
+            if (pendingChange == ChangeSource.PITCH) {
+                applyChargeForLock();
+            } else if (pendingChange == ChangeSource.CHARGE) {
+                applyPitchForLock();
+            } else if (pendingChange == ChangeSource.YAW) {
+                lockX = Integer.MIN_VALUE;
+                lockZ = Integer.MIN_VALUE;
+            }
+        }
+        pendingChange = ChangeSource.NONE;
         CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(
                 menu.getBlockEntity().getBlockPos(),
                 pitchSlider.intValue(), yawSlider.intValue(), chargeSlider.intValue(), currentMode()));
@@ -304,8 +367,13 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         graphics.drawString(font, "填充", 8, 57, TEXT, false);
         graphics.drawString(font, "货物", 8, 85, TEXT, false);
 
-        graphics.drawString(font, String.format("%d 格 / %.1f 秒", range, flight / 20.0),
-                SLIDER_X + 52, 102, TEXT_GOOD, false);
+        if (locked()) {
+            graphics.drawString(font, String.format("D %.0f", lockDistance()),
+                    SLIDER_X + 52, 102, 0x1F5FBF, false);
+        } else {
+            graphics.drawString(font, String.format("%d 格 / %.1f 秒", range, flight / 20.0),
+                    SLIDER_X + 52, 102, TEXT_GOOD, false);
+        }
 
         graphics.drawString(font, playerInventoryTitle, 8, inventoryLabelY, TEXT, false);
         if (cooldown > 0) {
