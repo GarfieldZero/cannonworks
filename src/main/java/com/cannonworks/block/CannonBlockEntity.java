@@ -122,6 +122,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
     public double getRangeExact(int usedCharge) {
         double efficiency = Ballistics.pitchEfficiency(pitch);
+        // 不设玩法上限：能打多远由装药与俯仰角决定，只保留防溢出的安全值
         return Math.min(usedCharge * (double) RANGE_PER_CHARGE * efficiency, Ballistics.MAX_RANGE);
     }
 

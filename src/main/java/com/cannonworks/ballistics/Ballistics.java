@@ -18,8 +18,11 @@ public final class Ballistics {
      *  45° 打 10000 格，真实抛物线顶点就是 2500 格。 */
     public static final double MIN_APEX = 10.0;
     public static final double MAX_APEX = 3000.0;
-    /** 单发最大射程（格），超出直接拒绝，避免一发炮弹把服务器拖去生成半个世界。 */
-    public static final double MAX_RANGE = 12000.0;
+    /**
+     * 安全上限（不是玩法上限）：只为防止极端输入让飞行 tick 溢出、或一发把服务器拖去生成半个世界。
+     * 实际能打多远由「装药 × 俯仰效率」决定。
+     */
+    public static final double MAX_RANGE = 100000.0;
     /** 高抛判定线（格）。 */
     public static final double HIGH_ARC_APEX = 120.0;
 
@@ -34,7 +37,10 @@ public final class Ballistics {
      */
     public static double pitchEfficiency(double pitchDeg) {
         double clamped = Mth.clamp(pitchDeg, MIN_PITCH, MAX_PITCH);
-        return Mth.clamp(1.0 - (clamped - 45.0) / 90.0, 0.5, 1.5);
+        // 余弦曲线：取水平分量占比，并以 45 度为 1。
+        // 0 度约 1.41 倍、45 度 1.0、80 度 0.25、接近 90 度趋近 0。
+        double value = Math.cos(Math.toRadians(clamped)) / Math.cos(Math.toRadians(45.0));
+        return Mth.clamp(value, 0.05, 1.5);
     }
 
     /**
