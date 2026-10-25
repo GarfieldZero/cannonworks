@@ -36,6 +36,7 @@ public final class XaeroBridge {
         if (waypoint == null) {
             return;
         }
+        add(waypoint);
         Deque<Object> trail = TRAILS.computeIfAbsent(flightId, key -> new ArrayDeque<>());
         trail.addLast(waypoint);
         while (trail.size() > MAX_TRAIL) {
