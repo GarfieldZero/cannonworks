@@ -76,16 +76,7 @@ public final class ShellManager {
         Flight flight = new Flight(UUID.randomUUID(), level, trajectory, owner, payload, mode);
         FLIGHTS.put(flight.id, flight);
         spawnEntity(flight, trajectory.sampleAtTick(0));
-        if (owner != null) {
-            ServerPlayer player = level.getServer().getPlayerList().getPlayer(owner);
-            if (player != null) {
-                for (int i = 1; i <= 6; i++) {
-                    Vec3 point = trajectory.sample(i / 7.0);
-                    CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new XaeroMarkerPacket(false, (int) point.x, (int) point.y, (int) point.z));
-                }
-            }
-        }
+
         return flight.id;
     }
 
@@ -144,6 +135,11 @@ public final class ShellManager {
         Vec3 from = trajectory.sampleAtTick(flight.age - 1);
         Vec3 to = trajectory.sampleAtTick(flight.age);
         keepChunkLoaded(flight.level, to);
+
+        // 每 5 秒在地图上补一个路径点（客户端只保留最近 3 个）
+        if (flight.age % 100 == 0) {
+            sendTrailPoint(flight, to);
+        }
 
         // 载体没了（区块卸载 / 被杀）就在当前位置补一个，飞行本身不受影响
         if (flight.entity == null || flight.entity.isRemoved()) {
@@ -240,10 +236,21 @@ public final class ShellManager {
 
         if (owner != null) {
             CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> owner),
-                    new XaeroMarkerPacket(true, (int) at.x, (int) at.y, (int) at.z));
+                    new XaeroMarkerPacket(true, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z));
         }
         notifyOwner(owner, at, reason, summary);
         end(flight);
+    }
+
+    private static void sendTrailPoint(Flight flight, Vec3 at) {
+        if (flight.owner == null) {
+            return;
+        }
+        ServerPlayer player = flight.level.getServer().getPlayerList().getPlayer(flight.owner);
+        if (player != null) {
+            CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new XaeroMarkerPacket(false, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z));
+        }
     }
 
     private static void notifyOwner(@Nullable ServerPlayer player, Vec3 at, String reason, String summary) {
