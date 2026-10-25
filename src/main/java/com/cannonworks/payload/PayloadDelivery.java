@@ -62,11 +62,19 @@ public final class PayloadDelivery {
     /** 填充方块：以命中点为中心连通生长，装满装载量为止（1:1，不会多也不会少）。 */
     private static int placeFiller(ServerLevel level, Vec3 hit, Vec3 incoming, CannonPayload payload,
                                    FireMode mode) {
-        Vec3 center = mode == FireMode.AIRBURST
-                ? groundPoint(level, hit)
-                : hit.subtract(safeNormalize(incoming).scale(0.5));
-        return ImpactEffects.placeBlob(level, center, payload.fillerState(), payload.fillerCount(),
-                CRATER_RADIUS + 1.5);
+        double radius = CRATER_RADIUS + 1.5;
+        if (mode == FireMode.AIRBURST) {
+            // 空爆就在命中点原地长——打墙面就贴在墙面，不再投影到墙脚。
+            // 如果命中点附近是纯空气（没有可依附的面），才退回地面投影。
+            int placed = ImpactEffects.placeBlob(level, hit, payload.fillerState(), payload.fillerCount(), radius);
+            if (placed == 0) {
+                placed = ImpactEffects.placeBlob(level, groundPoint(level, hit), payload.fillerState(),
+                        payload.fillerCount(), radius);
+            }
+            return placed;
+        }
+        Vec3 center = hit.subtract(safeNormalize(incoming).scale(0.5));
+        return ImpactEffects.placeBlob(level, center, payload.fillerState(), payload.fillerCount(), radius);
     }
 
     private static String applyCargo(ServerLevel level, Vec3 at, Vec3 incoming, CannonPayload payload,

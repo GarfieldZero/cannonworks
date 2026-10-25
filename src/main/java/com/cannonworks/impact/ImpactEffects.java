@@ -90,34 +90,45 @@ public final class ImpactEffects {
      */
     public static int placeBlob(ServerLevel level, Vec3 center, BlockState state, int max, double radius) {
         BlockPos centerPos = BlockPos.containing(center);
-        int r = (int) Math.ceil(radius);
-        List<BlockPos> cells = new ArrayList<>();
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    BlockPos pos = centerPos.offset(dx, dy, dz);
-                    if (level.isOutsideBuildHeight(pos)) {
-                        continue;
-                    }
-                    if (center.distanceTo(Vec3.atCenterOf(pos)) > radius) {
-                        continue;
-                    }
-                    BlockState current = level.getBlockState(pos);
-                    if (!current.isAir() && !current.canBeReplaced()) {
-                        continue;
-                    }
-                    cells.add(pos);
+        BlockPos start = findOpenNear(level, centerPos, 2);
+        if (start == null) {
+            return 0;
+        }
+
+        // 只从命中点所在的「连通空气腔」里生长：隔着墙的空气不连通，就不会长到墙背面去
+        Set<BlockPos> cells = new HashSet<>();
+        java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+        queue.add(start);
+        cells.add(start);
+        double radiusSqr = radius * radius;
+        while (!queue.isEmpty() && cells.size() < 4096) {
+            BlockPos pos = queue.poll();
+            for (Direction direction : Direction.values()) {
+                BlockPos next = pos.relative(direction);
+                if (cells.contains(next) || level.isOutsideBuildHeight(next)) {
+                    continue;
                 }
+                if (next.distSqr(start) > radiusSqr) {
+                    continue;
+                }
+                BlockState current = level.getBlockState(next);
+                if (!current.isAir() && !current.canBeReplaced()) {
+                    continue;
+                }
+                cells.add(next);
+                queue.add(next);
             }
         }
-        cells.sort(Comparator.comparingDouble(pos -> pos.distSqr(centerPos)));
+
+        List<BlockPos> ordered = new ArrayList<>(cells);
+        ordered.sort(Comparator.comparingDouble(pos -> pos.distSqr(centerPos)));
 
         Set<BlockPos> filled = new HashSet<>();
         int placed = 0;
         boolean progress = true;
         while (placed < max && progress) {
             progress = false;
-            for (BlockPos pos : cells) {
+            for (BlockPos pos : ordered) {
                 if (placed >= max) {
                     break;
                 }
@@ -141,6 +152,32 @@ public final class ImpactEffects {
             }
         }
         return placed;
+    }
+
+    /** 在命中点附近找一个可以开始生长空气格（命中点在方块表面/内部时用）。 */
+    private static BlockPos findOpenNear(ServerLevel level, BlockPos center, int r) {
+        BlockPos best = null;
+        double bestScore = Double.MAX_VALUE;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    BlockPos pos = center.offset(dx, dy, dz);
+                    if (level.isOutsideBuildHeight(pos)) {
+                        continue;
+                    }
+                    BlockState state = level.getBlockState(pos);
+                    if (!state.isAir() && !state.canBeReplaced()) {
+                        continue;
+                    }
+                    double score = pos.distSqr(center);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        best = pos;
+                    }
+                }
+            }
+        }
+        return best;
     }
 
     /** 六邻接里有没有「实心方块」或「本次已填的方块」。 */
