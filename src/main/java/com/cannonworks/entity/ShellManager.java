@@ -136,9 +136,12 @@ public final class ShellManager {
         Vec3 to = trajectory.sampleAtTick(flight.age);
         keepChunkLoaded(flight.level, to);
 
-        // 每 5 秒在地图上补一个路径点（客户端只保留最近 3 个）
-        if (flight.age % 100 == 0) {
-            sendTrailPoint(flight, to);
+        // 出膛立刻标一个，之后每 5 秒补一个（客户端只保留最近 3 个）
+        if (flight.age == 1 || flight.age % 100 == 0) {
+            boolean sent = sendTrailPoint(flight, to);
+            if (sent && flight.age == 1) {
+                CannonWorks.LOGGER.info("Xaero trail started for flight {} at {}", flight.id, to);
+            }
         }
 
         // 载体没了（区块卸载 / 被杀）就在当前位置补一个，飞行本身不受影响
@@ -242,15 +245,17 @@ public final class ShellManager {
         end(flight);
     }
 
-    private static void sendTrailPoint(Flight flight, Vec3 at) {
+    private static boolean sendTrailPoint(Flight flight, Vec3 at) {
         if (flight.owner == null) {
-            return;
+            return false;
         }
         ServerPlayer player = flight.level.getServer().getPlayerList().getPlayer(flight.owner);
-        if (player != null) {
-            CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                    new XaeroMarkerPacket(false, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z));
+        if (player == null) {
+            return false;
         }
+        CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new XaeroMarkerPacket(false, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z));
+        return true;
     }
 
     private static void notifyOwner(@Nullable ServerPlayer player, Vec3 at, String reason, String summary) {
