@@ -126,7 +126,8 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         }
         int yaw = (int) Math.round(Math.toDegrees(Math.atan2(-dx, dz)));
         yaw = Math.floorMod(yaw, 360);
-        int pitch = pitchSlider.intValue();
+        // 解算同时给出俯仰：默认 45 度（高低抛仍可解算后手动调整，只改弹道形状不改落点）
+        int pitch = 45;
 
         CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(pos, pitch, yaw, charge, currentMode()));
         pitchSlider.setLocal(pitch);
