@@ -2,6 +2,8 @@ package com.cannonworks.entity;
 
 import com.cannonworks.CannonWorks;
 import com.cannonworks.ballistics.Trajectory;
+import com.cannonworks.network.CannonNetwork;
+import com.cannonworks.network.XaeroMarkerPacket;
 import com.cannonworks.payload.CannonPayload;
 import com.cannonworks.payload.FireMode;
 import com.cannonworks.payload.PayloadDelivery;
@@ -26,6 +28,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 
@@ -73,6 +76,16 @@ public final class ShellManager {
         Flight flight = new Flight(UUID.randomUUID(), level, trajectory, owner, payload, mode);
         FLIGHTS.put(flight.id, flight);
         spawnEntity(flight, trajectory.sampleAtTick(0));
+        if (owner != null) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(owner);
+            if (player != null) {
+                for (int i = 1; i <= 6; i++) {
+                    Vec3 point = trajectory.sample(i / 7.0);
+                    CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new XaeroMarkerPacket(false, (int) point.x, (int) point.y, (int) point.z));
+                }
+            }
+        }
         return flight.id;
     }
 
@@ -225,6 +238,10 @@ public final class ShellManager {
                 String.format("%.1f/%.1f/%.1f", at.x, at.y, at.z), reason, flight.age,
                 String.format("%.1f", flight.trajectory.range()), flight.payload.describe(), summary);
 
+        if (owner != null) {
+            CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> owner),
+                    new XaeroMarkerPacket(true, (int) at.x, (int) at.y, (int) at.z));
+        }
         notifyOwner(owner, at, reason, summary);
         end(flight);
     }

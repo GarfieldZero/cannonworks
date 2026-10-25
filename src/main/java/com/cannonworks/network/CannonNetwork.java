@@ -32,5 +32,10 @@ public final class CannonNetwork {
                 .decoder(CannonAimPacket::decode)
                 .consumerMainThread(CannonAimPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(XaeroMarkerPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(XaeroMarkerPacket::encode)
+                .decoder(XaeroMarkerPacket::decode)
+                .consumerMainThread(XaeroMarkerPacket::handle)
+                .add();
     }
 }
