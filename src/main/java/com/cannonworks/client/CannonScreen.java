@@ -10,8 +10,10 @@ import java.util.function.IntConsumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
@@ -44,21 +46,23 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
     private static final int ROW_CHARGE = 60;
     private static final int SLIDER_X = 56;
     private static final int SLIDER_WIDTH = 104;
-    private static final int SEPARATOR_Y = 155;
+    private static final int SEPARATOR_Y = 162;
 
     private AimSlider pitchSlider;
     private AimSlider yawSlider;
     private AimSlider chargeSlider;
     private AimSlider activeSlider;
     private Button modeButton;
+    private EditBox targetXBox;
+    private EditBox targetZBox;
     /** 本地刚改过值时，先别被服务端的旧数据回拉。 */
     private int holdSync;
 
     public CannonScreen(CannonMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
         this.imageWidth = 176;
-        this.imageHeight = 240;
-        this.inventoryLabelY = 147;
+        this.imageHeight = 246;
+        this.inventoryLabelY = 154;
     }
 
     @Override
@@ -76,13 +80,70 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         addRenderableWidget(yawSlider);
         addRenderableWidget(chargeSlider);
 
+        targetXBox = new EditBox(font, leftPos + SLIDER_X, topPos + 78, 48, 16, Component.literal("X"));
+        targetXBox.setMaxLength(9);
+        targetXBox.setFilter(text -> text.matches("-?\\d*"));
+        targetXBox.setHint(Component.literal("X"));
+        addRenderableWidget(targetXBox);
+
+        targetZBox = new EditBox(font, leftPos + SLIDER_X + 52, topPos + 78, 48, 16, Component.literal("Z"));
+        targetZBox.setMaxLength(9);
+        targetZBox.setFilter(text -> text.matches("-?\\d*"));
+        targetZBox.setHint(Component.literal("Z"));
+        addRenderableWidget(targetZBox);
+
+        addRenderableWidget(Button.builder(Component.literal("解算"), b -> solve())
+                .bounds(leftPos + SLIDER_X, topPos + 98, 48, 16)
+                .build());
+
         addRenderableWidget(Button.builder(Component.literal("点火"), b -> fire())
-                .bounds(leftPos + SLIDER_X, topPos + 112, SLIDER_WIDTH, 20)
+                .bounds(leftPos + SLIDER_X, topPos + 118, SLIDER_WIDTH, 20)
                 .build());
         modeButton = Button.builder(modeLabel(), b -> toggleMode())
-                .bounds(leftPos + SLIDER_X, topPos + 136, SLIDER_WIDTH, 16)
+                .bounds(leftPos + SLIDER_X, topPos + 142, SLIDER_WIDTH, 16)
                 .build();
         addRenderableWidget(modeButton);
+    }
+
+    /** Fire-control solver: computes yaw + charge from a target X/Z, then commits them. */
+    private void solve() {
+        Integer targetX = parseCoord(targetXBox.getValue());
+        Integer targetZ = parseCoord(targetZBox.getValue());
+        if (targetX == null || targetZ == null) {
+            return;
+        }
+        BlockPos pos = menu.getBlockEntity().getBlockPos();
+        double dx = (targetX + 0.5) - (pos.getX() + 0.5);
+        double dz = (targetZ + 0.5) - (pos.getZ() + 0.5);
+        double range = Math.sqrt(dx * dx + dz * dz);
+        int charge = (int) Math.ceil(range / CannonBlockEntity.RANGE_PER_CHARGE);
+        if (charge > CannonBlockEntity.MAX_CHARGE) {
+            charge = CannonBlockEntity.MAX_CHARGE;
+            if (minecraft != null && minecraft.player != null) {
+                minecraft.player.displayClientMessage(
+                        Component.literal("目标超出最大射程，已按满装药装订"), true);
+            }
+        }
+        int yaw = (int) Math.round(Math.toDegrees(Math.atan2(-dx, dz)));
+        yaw = Math.floorMod(yaw, 360);
+        int pitch = pitchSlider.intValue();
+
+        CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(pos, pitch, yaw, charge, currentMode()));
+        pitchSlider.setLocal(pitch);
+        yawSlider.setLocal(yaw);
+        chargeSlider.setLocal(charge);
+        holdSync = 8;
+    }
+
+    private static Integer parseCoord(String text) {
+        if (text == null || text.isBlank() || "-".equals(text)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(text.trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private void sendAim() {
@@ -157,6 +218,10 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // 输入框获得焦点时，方向键/退格归它，别去拧炮
+        if (getFocused() instanceof EditBox) {
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
         int step = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0 ? 5 : 1;
         switch (keyCode) {
             case GLFW.GLFW_KEY_UP -> {
@@ -237,8 +302,8 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         graphics.drawString(font, "填充", 8, 57, TEXT, false);
         graphics.drawString(font, "货物", 8, 85, TEXT, false);
 
-        graphics.drawString(font, "射程 " + range + " 格", SLIDER_X, 84, TEXT_GOOD, false);
-        graphics.drawString(font, String.format("飞行 %.1f 秒", flight / 20.0), SLIDER_X, 96, TEXT_GOOD, false);
+        graphics.drawString(font, String.format("%d 格 / %.1f 秒", range, flight / 20.0),
+                SLIDER_X + 52, 102, TEXT_GOOD, false);
 
         graphics.drawString(font, playerInventoryTitle, 8, inventoryLabelY, TEXT, false);
         if (cooldown > 0) {
