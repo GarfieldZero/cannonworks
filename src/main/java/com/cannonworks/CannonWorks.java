@@ -29,6 +29,8 @@ public final class CannonWorks {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public CannonWorks() {
+        net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
+                net.minecraftforge.fml.config.ModConfig.Type.COMMON, com.cannonworks.config.CannonConfig.SPEC);
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         ModEntities.register(modBus);
         ModBlocks.register(modBus);

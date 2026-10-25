@@ -39,7 +39,8 @@ public final class XaeroBridge {
         add(waypoint);
         Deque<Object> trail = TRAILS.computeIfAbsent(flightId, key -> new ArrayDeque<>());
         trail.addLast(waypoint);
-        while (trail.size() > MAX_TRAIL) {
+        int maxTrail = com.cannonworks.config.CannonConfig.TRAIL_MAX_POINTS.get();
+        while (trail.size() > maxTrail) {
             remove(trail.removeFirst());
         }
     }

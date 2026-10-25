@@ -137,7 +137,7 @@ public final class ShellManager {
         keepChunkLoaded(flight.level, to);
 
         // 出膛立刻标一个，之后每 5 秒补一个（客户端只保留最近 3 个）
-        if (flight.age == 1 || flight.age % 100 == 0) {
+        if (flight.age == 1 || flight.age % com.cannonworks.config.CannonConfig.TRAIL_INTERVAL_TICKS.get() == 0) {
             boolean sent = sendTrailPoint(flight, to);
             if (sent && flight.age == 1) {
                 CannonWorks.LOGGER.info("Xaero trail started for flight {} at {}", flight.id, to);
