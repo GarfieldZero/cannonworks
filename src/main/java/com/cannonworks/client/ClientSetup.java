@@ -26,6 +26,7 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void registerLayers(EntityRenderersEvent.RegisterLayerDefinitions event) {
         event.registerLayerDefinition(CannonModel.LAYER, CannonModel::createBodyLayer);
+        event.registerLayerDefinition(CannonShellModel.LAYER, CannonShellModel::createBodyLayer);
     }
 
     @SubscribeEvent

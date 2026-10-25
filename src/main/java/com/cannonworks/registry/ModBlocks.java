@@ -2,6 +2,7 @@ package com.cannonworks.registry;
 
 import com.cannonworks.CannonWorks;
 import com.cannonworks.block.CannonBlock;
+import com.cannonworks.block.CannonPartBlock;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -29,6 +30,13 @@ public final class ModBlocks {
 
     public static final RegistryObject<Item> CANNON_ITEM = ITEMS.register("cannon",
             () -> new BlockItem(CANNON.get(), new Item.Properties()));
+
+    /** 不可见底座占位块：只负责碰撞与右键转发，没有物品形态。 */
+    public static final RegistryObject<Block> CANNON_PART = BLOCKS.register("cannon_part",
+            () -> new CannonPartBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(5.0f, 6.0f)
+                    .noOcclusion()));
 
     private ModBlocks() {
     }

@@ -75,7 +75,9 @@ public final class ShellManager {
                               FireMode mode) {
         Flight flight = new Flight(UUID.randomUUID(), level, trajectory, owner, payload, mode);
         FLIGHTS.put(flight.id, flight);
-        spawnEntity(flight, trajectory.sampleAtTick(0));
+        Vec3 at = trajectory.sampleAtTick(0);
+        Vec3 next = trajectory.sampleAtTick(1);
+        spawnEntity(flight, at, next.subtract(at));
 
         return flight.id;
     }
@@ -145,8 +147,11 @@ public final class ShellManager {
         }
 
         // 载体没了（区块卸载 / 被杀）就在当前位置补一个，飞行本身不受影响
+        Vec3 direction = to.subtract(from);
         if (flight.entity == null || flight.entity.isRemoved()) {
-            spawnEntity(flight, to);
+            spawnEntity(flight, to, direction);
+        } else {
+            flight.entity.setFlightDirection(direction);
         }
 
         // 关键：Level.clip 读未加载区块会当成空气，炮弹会直接穿墙。
@@ -172,13 +177,14 @@ public final class ShellManager {
         level.getChunk(pos.getX() >> 4, pos.getZ() >> 4, ChunkStatus.FULL, true);
     }
 
-    private static void spawnEntity(Flight flight, Vec3 at) {
+    private static void spawnEntity(Flight flight, Vec3 at, Vec3 direction) {
         BlockPos pos = BlockPos.containing(at);
         if (!flight.level.hasChunkAt(pos)) {
             return; // 区块还没加载好，下一 tick 再试；飞行逻辑不依赖它
         }
         CannonShellEntity shell = new CannonShellEntity(ModEntities.CANNON_SHELL.get(), flight.level);
         shell.setFlightId(flight.id);
+        shell.setFlightDirection(direction);
         shell.moveTo(at.x, at.y, at.z, 0.0f, 0.0f);
         flight.level.addFreshEntity(shell);
         flight.entity = shell;

@@ -34,7 +34,8 @@ import net.minecraftforge.network.NetworkHooks;
 public class CannonBlock extends BaseEntityBlock {
 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
-    private static final VoxelShape SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 12.0, 16.0);
+    /** 控制器本体的碰撞；底座其余部分由不可见占位块承担。 */
+    private static final VoxelShape SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 16.0, 16.0);
 
     public CannonBlock(Properties properties) {
         super(properties);
@@ -69,6 +70,11 @@ public class CannonBlock extends BaseEntityBlock {
     }
 
     @Override
+    public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return SHAPE;
+    }
+
+    @Override
     public RenderShape getRenderShape(BlockState state) {
         // 整个炮都由 BER 渲染，方块模型只提供一个空壳
         return RenderShape.ENTITYBLOCK_ANIMATED;
@@ -80,10 +86,28 @@ public class CannonBlock extends BaseEntityBlock {
         return new CannonBlockEntity(pos, state);
     }
 
+    /**
+     * 旧存档里的炮没有占位块；每秒补一次，保证碰撞/右键兼容。
+     */
+    @Nullable
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
+                                                                   BlockEntityType<T> type) {
+        if (level.isClientSide) {
+            return null;
+        }
+        return (lvl, pos, st, be) -> {
+            if (lvl instanceof net.minecraft.server.level.ServerLevel server && server.getGameTime() % 20L == 0L) {
+                CannonMultiblock.place(server, pos);
+            }
+        };
+    }
+
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
                                  BlockHitResult hit) {
         if (!level.isClientSide && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            CannonMultiblock.place((net.minecraft.server.level.ServerLevel) level, pos);
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof CannonBlockEntity cannon) {
                 NetworkHooks.openScreen(serverPlayer, cannon, pos);
@@ -93,11 +117,22 @@ public class CannonBlock extends BaseEntityBlock {
     }
 
     @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+        super.onPlace(state, level, pos, oldState, movedByPiston);
+        if (!level.isClientSide) {
+            CannonMultiblock.place((net.minecraft.server.level.ServerLevel) level, pos);
+        }
+    }
+
+    @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock())) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof CannonBlockEntity cannon) {
                 cannon.dropContents();
+            }
+            if (!level.isClientSide) {
+                CannonMultiblock.removeParts(level, pos);
             }
         }
         super.onRemove(state, level, pos, newState, movedByPiston);

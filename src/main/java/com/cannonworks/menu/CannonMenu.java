@@ -68,34 +68,34 @@ public class CannonMenu extends AbstractContainerMenu {
             }
         };
 
-        // 机器区：左侧两个槽（火药 / 负载），坐标与 CannonScreen 的排版一一对应
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PROPELLANT, 30, 24) {
+        // 机器区：左侧三个槽（火药 / 填充 / 货物），坐标与 CannonScreen 的 176×238 图集对齐
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_PROPELLANT, 35, 25) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return stack.is(Items.GUNPOWDER);
             }
         });
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_FILLER, 30, 52) {
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_FILLER, 35, 53) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return CannonBlockEntity.isValidFiller(stack);
             }
         });
-        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_CARGO, 30, 80) {
+        addSlot(new SlotItemHandler(blockEntity.getInventory(), CannonBlockEntity.SLOT_CARGO, 35, 81) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return CannonBlockEntity.isValidCargo(stack);
             }
         });
 
-        // 玩家背包与快捷栏：整体下移到 y=140 / y=198，给上面的信息区和点火按钮留出空间
+        // 玩家背包与快捷栏：整体放在 y=158 / y=216，给上面的信息区和点火按钮留出空间
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 164 + row * 18));
+                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 158 + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(playerInventory, col, 8 + col * 18, 222));
+            addSlot(new Slot(playerInventory, col, 8 + col * 18, 216));
         }
 
         addDataSlots(data);

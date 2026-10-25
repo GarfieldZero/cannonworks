@@ -1,5 +1,6 @@
 {
   "block.cannonworks.cannon": "Cannon",
   "entity.cannonworks.cannon_shell": "Cannon Shell",
-  "item.cannonworks.cannon": "Cannon"
+  "item.cannonworks.cannon": "Cannon",
+  "gui.cannonworks.cannon.title": "Heavy Cannon"
 }

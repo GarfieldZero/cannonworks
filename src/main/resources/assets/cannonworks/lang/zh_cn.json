@@ -1,5 +1,6 @@
 {
   "block.cannonworks.cannon": "大炮",
   "entity.cannonworks.cannon_shell": "炮弹",
-  "item.cannonworks.cannon": "大炮"
+  "item.cannonworks.cannon": "大炮",
+  "gui.cannonworks.cannon.title": "重炮"
 }

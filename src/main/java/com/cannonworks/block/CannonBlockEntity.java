@@ -11,6 +11,7 @@ import com.cannonworks.registry.ModBlockEntities;
 import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
@@ -19,6 +20,8 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -62,6 +65,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     private int yaw;
     private int charge = 8;
     private long cooldownUntil;
+    private long fireGameTime = -1L;
     private FireMode mode = FireMode.CONTACT;
 
     public CannonBlockEntity(BlockPos pos, BlockState state) {
@@ -114,6 +118,14 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
             return 0;
         }
         return (int) Math.max(0, cooldownUntil - level.getGameTime());
+    }
+
+    /**
+     * 最近一次开火的世界时间。客户端渲染器用它驱动后坐和炮口焰；
+     * 没有开过火时为 -1。
+     */
+    public long getFireGameTime() {
+        return fireGameTime;
     }
 
     /** 俯仰角会影响火药效率：低抛省药、高抛费药。 */
@@ -184,7 +196,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         CannonPayload payload = resolvePayload(fillerStack, cargoStack);
 
         Vec3 direction = Vec3.directionFromRotation(0.0f, yaw);
-        Vec3 origin = Vec3.atCenterOf(worldPosition).add(0.0, 0.9, 0.0).add(direction.scale(1.6));
+        Vec3 origin = CannonGeometry.muzzle(worldPosition, yaw, pitch);
         double range = getRangeExact(usedPowder);
         Vec3 target = origin.add(direction.scale(range));
         Trajectory trajectory = Ballistics.create(origin, target, pitch);
@@ -208,6 +220,8 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
         ShellManager.launch((ServerLevel) level, trajectory, player != null ? player.getUUID() : null, payload, mode);
         cooldownUntil = level.getGameTime() + FIRE_COOLDOWN_TICKS;
+        fireGameTime = level.getGameTime();
+        playFireEffects((ServerLevel) level, origin);
         setChanged();
         syncToClients();
 
@@ -215,6 +229,24 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
                 worldPosition, player != null ? player.getName().getString() : "console", String.format("%.0f", trajectory.range()), pitch, yaw,
                 payload.describe());
         return true;
+    }
+
+    /** 重炮开火的全服可见表现：大团烟、火焰、冲击尘和低频巨响。 */
+    private void playFireEffects(ServerLevel server, Vec3 muzzle) {
+        server.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                muzzle.x, muzzle.y, muzzle.z, 80, 1.8, 1.2, 1.8, 0.025);
+        server.sendParticles(ParticleTypes.LARGE_SMOKE,
+                muzzle.x, muzzle.y, muzzle.z, 50, 1.5, 0.9, 1.5, 0.04);
+        server.sendParticles(ParticleTypes.FLAME,
+                muzzle.x, muzzle.y, muzzle.z, 40, 0.9, 0.6, 0.9, 0.05);
+        server.sendParticles(ParticleTypes.CLOUD,
+                muzzle.x, muzzle.y, muzzle.z, 35, 1.8, 0.6, 1.8, 0.03);
+        server.sendParticles(ParticleTypes.EXPLOSION,
+                muzzle.x, muzzle.y, muzzle.z, 1, 0.0, 0.0, 0.0, 0.0);
+        server.playSound(null, muzzle.x, muzzle.y, muzzle.z,
+                SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 8.0f, 0.45f);
+        server.playSound(null, muzzle.x, muzzle.y, muzzle.z,
+                SoundEvents.FIREWORK_ROCKET_BLAST, SoundSource.BLOCKS, 2.5f, 0.55f);
     }
 
     /** 由「填充槽 + 货物槽」组合出一发炮弹的负载。 */
@@ -310,7 +342,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
     @Override
     public net.minecraft.world.phys.AABB getRenderBoundingBox() {
-        return new net.minecraft.world.phys.AABB(worldPosition).inflate(3.0);
+        return new net.minecraft.world.phys.AABB(worldPosition).inflate(10.0);
     }
 
     // ---- 存档 ----
@@ -323,6 +355,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         tag.putInt("Yaw", yaw);
         tag.putInt("Charge", charge);
         tag.putLong("CooldownUntil", cooldownUntil);
+        tag.putLong("FireGameTime", fireGameTime);
         tag.putString("Mode", mode.name());
     }
 
@@ -340,6 +373,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         yaw = tag.contains("Yaw") ? tag.getInt("Yaw") : yaw;
         charge = tag.contains("Charge") ? tag.getInt("Charge") : charge;
         cooldownUntil = tag.getLong("CooldownUntil");
+        fireGameTime = tag.contains("FireGameTime") ? tag.getLong("FireGameTime") : -1L;
         if (tag.contains("Mode")) {
             try {
                 mode = FireMode.valueOf(tag.getString("Mode"));
@@ -356,6 +390,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         CompoundTag tag = new CompoundTag();
         tag.putInt("Pitch", pitch);
         tag.putInt("Yaw", yaw);
+        tag.putLong("FireGameTime", fireGameTime);
         return tag;
     }
 
@@ -363,6 +398,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     public void handleUpdateTag(CompoundTag tag) {
         pitch = tag.getInt("Pitch");
         yaw = tag.getInt("Yaw");
+        fireGameTime = tag.contains("FireGameTime") ? tag.getLong("FireGameTime") : -1L;
     }
 
     @Nullable
