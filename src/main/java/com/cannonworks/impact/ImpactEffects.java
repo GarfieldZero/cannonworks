@@ -128,9 +128,6 @@ public final class ImpactEffects {
         List<BlockPos> ordered = new ArrayList<>(cells);
         ordered.sort(Comparator.comparingDouble(pos -> pos.distSqr(centerPos)));
 
-        // 落点在流体里时允许悬空铺（否则深水里永远找不到依附面，一块都放不下）
-        boolean inFluid = !level.getBlockState(start).getFluidState().isEmpty();
-
         Set<BlockPos> filled = new HashSet<>();
         int placed = 0;
         boolean progress = true;
@@ -148,9 +145,6 @@ public final class ImpactEffects {
                     continue;
                 }
                 if (!state.canSurvive(level, pos)) {
-                    continue;
-                }
-                if (!inFluid && !hasNeighbour(level, pos, filled)) {
                     continue;
                 }
                 level.setBlock(pos, state, 3);
