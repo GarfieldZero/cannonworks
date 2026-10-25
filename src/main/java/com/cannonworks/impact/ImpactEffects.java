@@ -1,6 +1,13 @@
 package com.cannonworks.impact;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -70,6 +77,85 @@ public final class ImpactEffects {
             }
         }
         return removed;
+    }
+
+    /**
+     * 把填充方块堆成「实心块」：从命中点向外长，只要和目标方块或已放方块相邻就放下，
+     * 一层层往中间填。
+     *
+     * <p>为什么不用「下方必须是实心」：打在山壁上时弹坑是个空腔，下面全是空气，
+     * 那样最多只能贴壁放几块。这里改成连通生长，64 个方块就能实打实铺满坑。</p>
+     *
+     * @return 实际放置数量（必然 ≤ max）
+     */
+    public static int placeBlob(ServerLevel level, Vec3 center, BlockState state, int max, double radius) {
+        BlockPos centerPos = BlockPos.containing(center);
+        int r = (int) Math.ceil(radius);
+        List<BlockPos> cells = new ArrayList<>();
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    BlockPos pos = centerPos.offset(dx, dy, dz);
+                    if (level.isOutsideBuildHeight(pos)) {
+                        continue;
+                    }
+                    if (center.distanceTo(Vec3.atCenterOf(pos)) > radius) {
+                        continue;
+                    }
+                    BlockState current = level.getBlockState(pos);
+                    if (!current.isAir() && !current.canBeReplaced()) {
+                        continue;
+                    }
+                    cells.add(pos);
+                }
+            }
+        }
+        cells.sort(Comparator.comparingDouble(pos -> pos.distSqr(centerPos)));
+
+        Set<BlockPos> filled = new HashSet<>();
+        int placed = 0;
+        boolean progress = true;
+        while (placed < max && progress) {
+            progress = false;
+            for (BlockPos pos : cells) {
+                if (placed >= max) {
+                    break;
+                }
+                if (filled.contains(pos)) {
+                    continue;
+                }
+                BlockState current = level.getBlockState(pos);
+                if (!current.isAir() && !current.canBeReplaced()) {
+                    continue;
+                }
+                if (!state.canSurvive(level, pos)) {
+                    continue;
+                }
+                if (!hasNeighbour(level, pos, filled)) {
+                    continue;
+                }
+                level.setBlock(pos, state, 3);
+                filled.add(pos);
+                placed++;
+                progress = true;
+            }
+        }
+        return placed;
+    }
+
+    /** 六邻接里有没有「实心方块」或「本次已填的方块」。 */
+    private static boolean hasNeighbour(ServerLevel level, BlockPos pos, Set<BlockPos> filled) {
+        for (Direction direction : Direction.values()) {
+            BlockPos neighbour = pos.relative(direction);
+            if (filled.contains(neighbour)) {
+                return true;
+            }
+            BlockState state = level.getBlockState(neighbour);
+            if (!state.isAir() && state.getFluidState().isEmpty() && !state.canBeReplaced()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

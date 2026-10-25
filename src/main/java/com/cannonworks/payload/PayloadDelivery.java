@@ -1,5 +1,6 @@
 package com.cannonworks.payload;
 
+import com.cannonworks.entity.ShellManager;
 import com.cannonworks.impact.ImpactEffects;
 import com.cannonworks.integration.WaystoneDelivery;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.fml.ModList;
@@ -57,50 +59,14 @@ public final class PayloadDelivery {
         return result.toString();
     }
 
-    /** 填充方块：从坑底往上铺，铺满装载量为止（不会凭空多出来）。 */
+    /** 填充方块：以命中点为中心连通生长，装满装载量为止（1:1，不会多也不会少）。 */
     private static int placeFiller(ServerLevel level, Vec3 hit, Vec3 incoming, CannonPayload payload,
                                    FireMode mode) {
         Vec3 center = mode == FireMode.AIRBURST
                 ? groundPoint(level, hit)
                 : hit.subtract(safeNormalize(incoming).scale(0.5));
-        BlockPos centerPos = BlockPos.containing(center);
-        BlockState state = payload.fillerState();
-        int radius = (int) Math.ceil(CRATER_RADIUS + 1);
-
-        List<BlockPos> candidates = new ArrayList<>();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    BlockPos pos = centerPos.offset(dx, dy, dz);
-                    if (center.distanceTo(Vec3.atCenterOf(pos)) > CRATER_RADIUS + 0.8) {
-                        continue;
-                    }
-                    if (!level.getBlockState(pos).isAir()) {
-                        continue;
-                    }
-                    BlockPos below = pos.below();
-                    if (!level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)) {
-                        continue;
-                    }
-                    if (!state.canSurvive(level, pos)) {
-                        continue;
-                    }
-                    candidates.add(pos);
-                }
-            }
-        }
-        candidates.sort(Comparator.comparingInt((BlockPos pos) -> pos.getY())
-                .thenComparingDouble(pos -> pos.distSqr(centerPos)));
-
-        int placed = 0;
-        for (BlockPos pos : candidates) {
-            if (placed >= payload.fillerCount()) {
-                break;
-            }
-            level.setBlock(pos, state, 3);
-            placed++;
-        }
-        return placed;
+        return ImpactEffects.placeBlob(level, center, payload.fillerState(), payload.fillerCount(),
+                CRATER_RADIUS + 1.5);
     }
 
     private static String applyCargo(ServerLevel level, Vec3 at, Vec3 incoming, CannonPayload payload,
@@ -108,25 +74,25 @@ public final class PayloadDelivery {
         return switch (payload.cargo()) {
             case NONE -> "";
             case WAYSTONE -> waystone(level, at, owner, payload);
-            case TNT -> tnt(level, at, incoming);
+            case TNT -> tnt(level, at);
             case ENDER_PEARL -> enderPearl(level, at, owner);
             case WARP_PLATE -> warpPlate(level, at);
         };
     }
 
-    /** 爆破：半径 6 的额外爆炸（接触模式下会和基础弹坑叠加）。 */
-    private static String tnt(ServerLevel level, Vec3 at, Vec3 incoming) {
-        int carved = ImpactEffects.carveCrater(level, at, incoming, TNT_RADIUS);
-        for (int i = 0; i < 8; i++) {
-            double dx = (level.random.nextDouble() - 0.5) * 6.0;
-            double dy = (level.random.nextDouble() - 0.5) * 4.0;
-            double dz = (level.random.nextDouble() - 0.5) * 6.0;
-            level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
-                    at.x + dx, at.y + dy, at.z + dz, 1, 0.0, 0.0, 0.0, 0.0);
-        }
-        level.playSound(null, at.x, at.y, at.z, net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE,
-                net.minecraft.sounds.SoundSource.BLOCKS, 8.0f, 0.4f);
-        return "TNT 爆破 " + carved + " 格";
+    /**
+     * TNT 货物：在落点放一个真正点燃的 TNT 实体。
+     *
+     * <p>不手动挖坑——让原版爆炸自己处理，这样：
+     * ① 破坏的方块会按原版规则掉落；② 点燃它能引爆周围作为填充方的 TNT，形成链式反应。</p>
+     * <p>同时给落点挂 200 tick 的 ticking ticket，否则没人的区块里 TNT 实体根本不会爆。</p>
+     */
+    private static String tnt(ServerLevel level, Vec3 at) {
+        ShellManager.keepAreaTicking(level, at);
+        PrimedTnt primed = new PrimedTnt(level, at.x, at.y + 0.5, at.z, null);
+        primed.setFuse(20);
+        level.addFreshEntity(primed);
+        return "TNT 已点燃（20 tick 后起爆）";
     }
 
     /** 特殊货物：把石碑立在落点，并给发射者激活。 */

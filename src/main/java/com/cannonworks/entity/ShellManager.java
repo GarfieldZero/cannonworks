@@ -5,8 +5,8 @@ import com.cannonworks.ballistics.Trajectory;
 import com.cannonworks.payload.CannonPayload;
 import com.cannonworks.payload.FireMode;
 import com.cannonworks.payload.PayloadDelivery;
-import com.cannonworks.payload.PayloadDelivery;
 import com.cannonworks.registry.ModEntities;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,6 +56,9 @@ public final class ShellManager {
     private static final TicketType<ChunkPos> SHELL_TICKET =
             TicketType.create("cannonworks:shell", Comparator.comparingLong(ChunkPos::toLong), TICKET_TIMEOUT_TICKS);
 
+    /** 需要临时强制加载的落点（TNT 链式反应用）。 */
+    private static final List<ForcedArea> FORCED_AREAS = new ArrayList<>();
+
     private ShellManager() {
     }
 
@@ -96,7 +99,11 @@ public final class ShellManager {
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || FLIGHTS.isEmpty()) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
+        releaseExpiredForcedAreas(event.getServer());
+        if (FLIGHTS.isEmpty()) {
             return;
         }
         for (Flight flight : List.copyOf(FLIGHTS.values())) {
@@ -165,6 +172,35 @@ public final class ShellManager {
         flight.entity = shell;
     }
 
+    /**
+     * 让落点区块在接下来 200 tick 内保持 entity-ticking。
+     *
+     * <p>用 {@code setChunkForced} 而不是自定义 ticket：实测只有 forced 状态能保证区块里的
+     * 实体真正 tick（普通 ticket 在 0 人服务器上不 tick，TNT 会永远不爆）。到期自动解禁。</p>
+     */
+    public static void keepAreaTicking(ServerLevel level, Vec3 at) {
+        ChunkPos chunk = new ChunkPos(BlockPos.containing(at));
+        level.setChunkForced(chunk.x, chunk.z, true);
+        FORCED_AREAS.add(new ForcedArea(level, chunk, level.getGameTime() + 200));
+    }
+
+    private static void releaseExpiredForcedAreas(net.minecraft.server.MinecraftServer server) {
+        if (FORCED_AREAS.isEmpty()) {
+            return;
+        }
+        long now = server.overworld().getGameTime();
+        FORCED_AREAS.removeIf(area -> {
+            if (area.until() > now) {
+                return false;
+            }
+            area.level().setChunkForced(area.chunk().x, area.chunk().z, false);
+            return true;
+        });
+    }
+
+    private record ForcedArea(ServerLevel level, ChunkPos chunk, long until) {
+    }
+
     private static void keepChunkLoaded(ServerLevel level, Vec3 at) {
         ChunkPos chunk = new ChunkPos(BlockPos.containing(at));
         level.getChunkSource().addRegionTicket(SHELL_TICKET, chunk, TICKET_RADIUS, chunk);
@@ -208,6 +244,10 @@ public final class ShellManager {
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
+        for (ForcedArea area : FORCED_AREAS) {
+            area.level().setChunkForced(area.chunk().x, area.chunk().z, false);
+        }
+        FORCED_AREAS.clear();
         for (Flight flight : FLIGHTS.values()) {
             if (flight.entity != null && !flight.entity.isRemoved()) {
                 flight.entity.discard();
