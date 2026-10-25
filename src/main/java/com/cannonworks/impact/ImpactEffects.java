@@ -22,6 +22,27 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class ImpactEffects {
 
+    /**
+     * 从命中点往下找到真正的表面（水面 / 地面），返回该表面上方的坐标。
+     *
+     * <p>弹道终点是按炮口高度算的，炮弹「到达」时往往还在空中；不贴地就会生成悬空结构。</p>
+     */
+    public static Vec3 findSurface(ServerLevel level, Vec3 at, int maxDrop) {
+        BlockPos pos = BlockPos.containing(at);
+        for (int i = 0; i <= maxDrop; i++) {
+            BlockPos probe = pos.below(i);
+            if (level.isOutsideBuildHeight(probe)) {
+                break;
+            }
+            BlockState state = level.getBlockState(probe);
+            if (isOpen(state)) {
+                continue;
+            }
+            return new Vec3(at.x, probe.getY() + 1.0, at.z);
+        }
+        return at;
+    }
+
     /** 空位 = 空气 / 可替换方块 / 流体。水不能算墙。 */
     private static boolean isOpen(BlockState state) {
         return state.isAir() || state.canBeReplaced() || !state.getFluidState().isEmpty();

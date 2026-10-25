@@ -207,6 +207,10 @@ public final class ShellManager {
     }
 
     private static void impact(Flight flight, Vec3 at, String reason) {
+        if ("arrived".equals(reason)) {
+            // 到达终点时通常还在空中：往下贴到水面/地面再生成结构
+            at = com.cannonworks.impact.ImpactEffects.findSurface(flight.level, at, 64);
+        }
         Vec3 incoming = flight.trajectory.sampleAtTick(flight.age)
                 .subtract(flight.trajectory.sampleAtTick(Math.max(0, flight.age - 1)));
 
