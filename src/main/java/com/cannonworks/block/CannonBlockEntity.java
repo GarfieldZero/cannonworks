@@ -46,7 +46,8 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     public static final int SLOT_FILLER = 1;
     /** 货物（石碑 / TNT / 末影珍珠 / 传送板）。 */
     public static final int SLOT_CARGO = 2;
-    public static final int MAX_CHARGE = 40;
+    /** 一组火药 = 64 份，也就是单发装药上限。 */
+    public static final int MAX_CHARGE = 64;
     public static final int RANGE_PER_CHARGE = 300;
     public static final int FIRE_COOLDOWN_TICKS = 40;
 
