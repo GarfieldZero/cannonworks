@@ -196,5 +196,13 @@ cd "G:\我的世界大炮计划"
 5. 火控：输入目标 X/Z 反解方位与装药，俯仰由玩家定 —— ✅（够用）
 6. 地图：Xaero 小地图/世界地图的弹道点与落点标记 —— ✅（原计划 JourneyMap，整合包适配太少）
 
-剩下只有 **M6 打磨**：美术由建模对话负责，清单在 `docs/agent-bus/model.md`；
-本地化 / 配置 / 平衡 / 测试由数据层负责。里程碑细节见 [`docs/design-v1.md`](docs/design-v1.md) §9。
+剩下只有 **M6 打磨**：美术、配置、平衡、多人测试。里程碑细节见 [`docs/design-v1.md`](docs/design-v1.md) §9。
+
+## 7. 常见问题
+
+- **构建报 `Failed to validate certificate for host 'https://maven.minecraftforge.net/'`**：
+  本机网络环境（代理 / 杀软）让 ForgeGradle 的证书校验失败，在命令后加
+  `-Dnet.minecraftforge.gradle.check.certs=false` 再构建即可。这是环境问题，不是代码问题。
+- **构建报找不到 `local:waystones`**：`libs/` 不入库，按 §2 说明下载 Waystones 14.1.21
+  与 Balm 7.3.44 放进 `libs/`。
+- **只想跑单元测试**：`gradlew.bat test`，不需要 `libs/` 里的联动模组。
