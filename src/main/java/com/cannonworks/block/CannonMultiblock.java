@@ -10,28 +10,24 @@ import net.minecraft.world.level.block.Blocks;
 /**
  * 大炮底座的碰撞占位结构。
  *
- * <p>大炮视觉上约 4×3 格。控制器只有一个方块；Minecraft 只会查询
- * 控制器自身 1×1 所属格里的 VoxelShape，所以不能用“超大 shape”覆盖
- * 底座。这里用不可见占位方块填满底座（4×4 足迹、2 格高），由占位方块
- * 负责碰撞和右键转发。</p>
+ * <p>控制器只有一个方块；Minecraft 只会查询控制器自身 1×1 所属格里的
+ * VoxelShape，所以不能用“超大 shape”覆盖底座。这里用一圈不可见占位方块
+ * 罩住炮台可能转到的范围（5×5 格、2 格高），每个占位块的碰撞形状再由
+ * {@link CannonCollision} 按当前方位角裁出来。</p>
  *
- * <p>4×4 是旋转对称的，因此东/南/西/北四种朝向都不用重新排布。
- * 这些方块没有 BlockEntity；右键/破坏时在附近扫描控制器。</p>
+ * <p>关键点：占位块只负责“查询格子”，不再是一整块实心方块。空网格的
+ * collision shape 是 empty，玩家可以正常走过去；只有模型真正占到的部分
+ * 才有碰撞，所以不会再有空气墙。</p>
  */
 public final class CannonMultiblock {
 
-    /** 当前占位足迹：4×4，高 2。 */
+    /** 炮台转到任意角度时可能占到的外围范围：5×5。 */
     public static final int X_MIN = -2;
-    public static final int X_MAX = 1;
+    public static final int X_MAX = 2;
     public static final int Z_MIN = -2;
-    public static final int Z_MAX = 1;
+    public static final int Z_MAX = 2;
     public static final int HEIGHT = 2;
-
-    /** 清理旧版本 5×4×3 足迹时使用的外围范围。 */
-    private static final int CLEAR_X_MIN = -2;
-    private static final int CLEAR_X_MAX = 2;
-    private static final int CLEAR_Z_MIN = -2;
-    private static final int CLEAR_Z_MAX = 2;
+    /** 清旧版占位块时多查一层：旧 5×4×3 版本在 y+2 还有一层。 */
     private static final int CLEAR_HEIGHT = 3;
 
     private static boolean removing;
@@ -50,10 +46,10 @@ public final class CannonMultiblock {
         boolean previous = removing;
         removing = true;
         try {
-            // 清掉旧版 5×4×3 足迹里不属于新 4×4×2 的占位块。
+            // 清掉不属于当前 5×5×2 范围的旧占位块（包括上一版 4×4×2 / 5×4×3）。
             for (int dy = 0; dy < CLEAR_HEIGHT; dy++) {
-                for (int dx = CLEAR_X_MIN; dx <= CLEAR_X_MAX; dx++) {
-                    for (int dz = CLEAR_Z_MIN; dz <= CLEAR_Z_MAX; dz++) {
+                for (int dx = X_MIN; dx <= X_MAX; dx++) {
+                    for (int dz = Z_MIN; dz <= Z_MAX; dz++) {
                         BlockPos pos = anchor.offset(dx, dy, dz);
                         if (!pos.equals(anchor)
                                 && !isPart(anchor, pos)
@@ -84,7 +80,7 @@ public final class CannonMultiblock {
     public static BlockPos findMaster(Level level, BlockPos part) {
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) {
-                for (int dy = -2; dy <= 0; dy++) {
+                for (int dy = -1; dy <= 0; dy++) {
                     BlockPos candidate = part.offset(dx, dy, dz);
                     if (level.getBlockEntity(candidate) instanceof CannonBlockEntity && isPart(candidate, part)) {
                         return candidate;
@@ -136,8 +132,8 @@ public final class CannonMultiblock {
 
     private static void clearParts(Level level, BlockPos anchor) {
         for (int dy = 0; dy < CLEAR_HEIGHT; dy++) {
-            for (int dx = CLEAR_X_MIN; dx <= CLEAR_X_MAX; dx++) {
-                for (int dz = CLEAR_Z_MIN; dz <= CLEAR_Z_MAX; dz++) {
+            for (int dx = X_MIN; dx <= X_MAX; dx++) {
+                for (int dz = Z_MIN; dz <= Z_MAX; dz++) {
                     BlockPos pos = anchor.offset(dx, dy, dz);
                     if (!pos.equals(anchor) && level.getBlockState(pos).is(ModBlocks.CANNON_PART.get())) {
                         level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);

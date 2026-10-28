@@ -217,7 +217,51 @@ public final class CannonCommand {
                                 .then(Commands.argument("slot", IntegerArgumentType.integer(0, 2))
                                         .then(Commands.argument("item", ItemArgument.item(buildContext))
                                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
-                                                        .executes(CannonCommand::blockLoad))))));
+                                                        .executes(CannonCommand::blockLoad))))))
+                .then(Commands.literal("name")
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                .then(Commands.argument("name", StringArgumentType.greedyString())
+                                        .executes(CannonCommand::blockName))))
+                // greedyString 会把引号原样吞进去，传不了空串，清空只好单开一个子命令
+                .then(Commands.literal("clearname")
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                .executes(CannonCommand::blockClearName)));
+    }
+
+    /** 无头验收用：清掉石碑的自定义名字，等价于界面命名框里删空再回车。 */
+    private static int blockClearName(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        if (!(source.getLevel().getBlockEntity(pos) instanceof CannonBlockEntity cannon)) {
+            source.sendFailure(Component.literal("那里不是大炮"));
+            return 0;
+        }
+        if (!cannon.renameCargo("")) {
+            source.sendFailure(Component.literal("货物槽里没有可命名的石碑"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("已清空名字"), false);
+        return 1;
+    }
+
+    /**
+     * 无头验收用：给货物槽里的石碑改名，等价于界面的命名框。
+     * 名字走 {@code renameCargo}，也就是玩家点 GUI 时走的那条路。
+     */
+    private static int blockName(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        if (!(source.getLevel().getBlockEntity(pos) instanceof CannonBlockEntity cannon)) {
+            source.sendFailure(Component.literal("那里不是大炮"));
+            return 0;
+        }
+        String name = StringArgumentType.getString(context, "name");
+        if (!cannon.renameCargo(name)) {
+            source.sendFailure(Component.literal("货物槽里没有可命名的石碑"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("已命名为「" + name + "」"), false);
+        return 1;
     }
 
     private static int blockFire(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

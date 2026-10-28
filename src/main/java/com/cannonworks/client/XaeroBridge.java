@@ -45,13 +45,22 @@ public final class XaeroBridge {
         }
     }
 
-    /** 落地：清掉这条弹道的所有路径点，再加一个落点。 */
-    public static void onImpact(int flightId, int x, int y, int z) {
+    /**
+     * 落地：清掉这条弹道的所有路径点，再加一个落点。
+     *
+     * @param label 落点名字；空串时用本地化的「落点 x, z」。
+     *              打石碑会传石碑名，免得地图上显示坐标名、看着像命名没生效。
+     */
+    public static void onImpact(int flightId, int x, int y, int z, String label) {
         Deque<Object> trail = TRAILS.remove(flightId);
         if (trail != null) {
             trail.forEach(XaeroBridge::remove);
         }
-        add(create(x, y, z, "Impact " + x + ", " + z, 0xFFAA00));
+        String name = label != null && !label.isBlank()
+                ? label
+                : net.minecraft.network.chat.Component
+                        .translatable("gui.cannonworks.marker.impact", x, z).getString();
+        add(create(x, y, z, name, 0xFFAA00));
     }
 
     private static Object create(int x, int y, int z, String name, int color) {

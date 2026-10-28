@@ -26,6 +26,12 @@ run-data
 .cache/
 .tools/
 
+# 第三方联动模组 jar：不随仓库分发，按 README §1 的版本自行下载到 libs/
+libs/
+
+# 几路 AI 对话之间的协作记录（内部笔记，含本机路径）
+docs/agent-bus/
+
 # 日志
 *.log
 

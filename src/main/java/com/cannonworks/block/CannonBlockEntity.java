@@ -2,6 +2,7 @@ package com.cannonworks.block;
 
 import com.cannonworks.CannonWorks;
 import com.cannonworks.ballistics.Ballistics;
+import com.cannonworks.ballistics.ChargeMath;
 import com.cannonworks.ballistics.Trajectory;
 import com.cannonworks.entity.ShellManager;
 import com.cannonworks.menu.CannonMenu;
@@ -40,7 +41,9 @@ import net.minecraftforge.items.ItemStackHandler;
  * 大炮的装填与射击逻辑。
  *
  * <p>槽位：0 = 发射药（火药），1 = 负载（石碑 / 草垛 / 水桶 / 任意方块）。</p>
- * <p>装药量（{@link #charge}）是「这次用几份火药」，决定射程；俯仰角与方位角决定弹道。</p>
+ * <p>装药量（{@link #charge}）决定射程，俯仰角与方位角决定弹道。
+ * 注意单位：装药量存的是<b>十分之一份</b>（80 = 8.0 份），不是火药个数。
+ * 用整数十分之一是为了让 0.1 份的精度能原样走网络包和 NBT，不用和浮点误差较劲。</p>
  */
 public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
@@ -49,9 +52,19 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     public static final int SLOT_FILLER = 1;
     /** 货物（石碑 / TNT / 末影珍珠 / 传送板）。 */
     public static final int SLOT_CARGO = 2;
-    /** 一组火药 = 64 份，也就是单发装药上限。 */
-    public static final int MAX_CHARGE = 64;
+    /** 单发装药上限，单位「十分之一份」：640 = 64.0 份 = 一组火药。 */
+    public static final int MAX_CHARGE = ChargeMath.MAX_CHARGE_TENTHS;
+    /** 1.0 份装药 = 10 个内部单位（十分之一份）。界面显示和反解都拿它换算。 */
+    public static final int TENTHS_PER_CHARGE = ChargeMath.TENTHS_PER_CHARGE;
+    /** 1.0 份火药在 45° 俯仰下的射程（格）。 */
     public static final int RANGE_PER_CHARGE = 300;
+    /**
+     * 存档里 {@code Charge} 的单位记号：2 = 十分之一份（当前格式）。
+     *
+     * <p>只在「没有这个记号」时才按旧单位迁移，而不是单看 {@code Charge <= 64}——
+     * 新存档里 6.4 份（64）也满足那个条件，会被误乘成 64.0 份，炮直接飞天。</p>
+     */
+    private static final int CHARGE_SCALE_TENTHS = 2;
     public static final int FIRE_COOLDOWN_TICKS = 40;
 
     private final ItemStackHandler inventory = new ItemStackHandler(3) {
@@ -63,7 +76,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
     private int pitch = 45;
     private int yaw;
-    private int charge = 8;
+    private int charge = 80; // 8.0 份
     private long cooldownUntil;
     private long fireGameTime = -1L;
     private FireMode mode = FireMode.CONTACT;
@@ -133,10 +146,14 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         return getRangeExact(charge);
     }
 
-    public double getRangeExact(int usedCharge) {
+    /**
+     * @param usedChargeTenths 实际参与计算装药，单位「十分之一份」
+     */
+    public double getRangeExact(int usedChargeTenths) {
         double efficiency = Ballistics.pitchEfficiency(pitch);
+        double charges = ChargeMath.toCharges(usedChargeTenths);
         // 不设玩法上限：能打多远由装药与俯仰角决定，只保留防溢出的安全值
-        return Math.min(usedCharge * (double) RANGE_PER_CHARGE * efficiency, Ballistics.MAX_RANGE);
+        return Math.min(charges * RANGE_PER_CHARGE * efficiency, Ballistics.MAX_RANGE);
     }
 
     public int getRange() {
@@ -158,10 +175,16 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     public void setCharge(int value) {
-        this.charge = Math.max(0, Math.min(MAX_CHARGE, value));
+        this.charge = ChargeMath.clamp(value);
         setChanged();
     }
 
+    /**
+     * 键盘/滑条微调。
+     *
+     * <p>三个 delta 跟字段同单位：角度是度，装药是<b>十分之一份</b>。
+     * 界面按 PgUp/PgDn 一次发 ±{@link #TENTHS_PER_CHARGE}（=1.0 份），不然 0..640 档要按 640 次。</p>
+     */
     public void adjust(int pitchDelta, int yawDelta, int chargeDelta) {
         setPitch(pitch + pitchDelta);
         setYaw(yaw + yawDelta);
@@ -189,7 +212,9 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
             return false;
         }
         ItemStack propellant = inventory.getStackInSlot(SLOT_PROPELLANT);
-        int usedPowder = Math.min(charge, propellant.getCount());
+        // 火药按「整份」消耗、按请求的装药算射程；规则全在 ChargeMath 里，有单元测试守着
+        int usedItems = ChargeMath.consumedItems(charge, propellant.getCount());
+        int usedChargeTenths = ChargeMath.effectiveChargeTenths(charge, propellant.getCount());
 
         ItemStack fillerStack = inventory.getStackInSlot(SLOT_FILLER);
         ItemStack cargoStack = inventory.getStackInSlot(SLOT_CARGO);
@@ -197,13 +222,13 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
 
         Vec3 direction = Vec3.directionFromRotation(0.0f, yaw);
         Vec3 origin = CannonGeometry.muzzle(worldPosition, yaw, pitch);
-        double range = getRangeExact(usedPowder);
+        double range = getRangeExact(usedChargeTenths);
         Vec3 target = origin.add(direction.scale(range));
         Trajectory trajectory = Ballistics.create(origin, target, pitch);
 
         ItemStack remainder = cargoStack.isEmpty() ? ItemStack.EMPTY : cargoStack.getCraftingRemainingItem();
 
-        propellant.shrink(usedPowder);
+        propellant.shrink(usedItems);
         // 填充方块：整叠装、整叠打（1:1 铺到落点）
         if (payload.hasFiller()) {
             inventory.extractItem(SLOT_FILLER, payload.fillerCount(), false);
@@ -225,9 +250,10 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         setChanged();
         syncToClients();
 
-        CannonWorks.LOGGER.info("Cannon fired at {} by {}: range {} pitch {} yaw {} payload {}",
-                worldPosition, player != null ? player.getName().getString() : "console", String.format("%.0f", trajectory.range()), pitch, yaw,
-                payload.describe());
+        CannonWorks.LOGGER.info("Cannon fired at {} by {}: charge {} ({} powder) range {} pitch {} yaw {} payload {}",
+                worldPosition, player != null ? player.getName().getString() : "console",
+                String.format("%.1f", ChargeMath.toCharges(usedChargeTenths)), usedItems,
+                String.format("%.0f", trajectory.range()), pitch, yaw, payload.describe());
         return true;
     }
 
@@ -312,8 +338,33 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         return "waystones".equals(id.getNamespace()) && id.getPath().contains("warp_plate");
     }
 
+    /**
+     * 给货物槽里的石碑改名（界面命名框用，省得跑铁砧）。
+     *
+     * <p>名字写在物品自己的 {@code display.Name} 上：拿下来还是这个名字，换台炮也认。
+     * 传空字符串就恢复默认，落点石碑会叫「空投点 x, z」。</p>
+     *
+     * @return 是否真的改了（槽里不是石碑就返回 false，什么都不做）
+     */
+    public boolean renameCargo(String name) {
+        ItemStack stack = inventory.getStackInSlot(SLOT_CARGO);
+        if (!isWaystoneItem(stack)) {
+            return false;
+        }
+        // 客户端会 trim 一遍，这里再来一次：命令/别的 mod 也可能直接调进来，
+        // 全是空格的名字在落点石碑列表里就是一个看不见的空条目，很难排查。
+        String trimmed = name == null ? "" : name.trim();
+        if (trimmed.isEmpty()) {
+            stack.resetHoverName();
+        } else {
+            stack.setHoverName(Component.literal(trimmed));
+        }
+        setChanged();
+        return true;
+    }
+
     /** 不硬依赖 Waystones：按注册名判断，避免类加载。 */
-    private static boolean isWaystoneItem(ItemStack stack) {
+    public static boolean isWaystoneItem(ItemStack stack) {
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
         return "waystones".equals(id.getNamespace())
                 && (id.getPath().contains("waystone") || id.getPath().contains("sharestone"));
@@ -354,6 +405,8 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         tag.putInt("Pitch", pitch);
         tag.putInt("Yaw", yaw);
         tag.putInt("Charge", charge);
+        // 单位记号：没有它就只能靠猜新旧格式，见 CHARGE_SCALE_TENTHS 的注释
+        tag.putInt("ChargeScale", CHARGE_SCALE_TENTHS);
         tag.putLong("CooldownUntil", cooldownUntil);
         tag.putLong("FireGameTime", fireGameTime);
         tag.putString("Mode", mode.name());
@@ -371,7 +424,9 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         }
         pitch = tag.contains("Pitch") ? tag.getInt("Pitch") : pitch;
         yaw = tag.contains("Yaw") ? tag.getInt("Yaw") : yaw;
-        charge = tag.contains("Charge") ? tag.getInt("Charge") : charge;
+        int storedCharge = tag.contains("Charge") ? tag.getInt("Charge") : charge;
+        // 旧存档：没有 ChargeScale 记号、值不超过旧上限 → 按整数份 ×10；规则见 ChargeMath#migrateCharge
+        charge = ChargeMath.migrateCharge(storedCharge, tag.contains("ChargeScale"));
         cooldownUntil = tag.getLong("CooldownUntil");
         fireGameTime = tag.contains("FireGameTime") ? tag.getLong("FireGameTime") : -1L;
         if (tag.contains("Mode")) {

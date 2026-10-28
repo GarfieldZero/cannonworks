@@ -244,8 +244,11 @@ public final class ShellManager {
                 String.format("%.1f", flight.trajectory.range()), flight.payload.describe(), summary);
 
         if (owner != null) {
+            // 打石碑时地图标记直接用石碑名字（没自定义名就留空，客户端回退到「落点 x, z」）
+            String markerLabel = flight.payload.cargoName() != null ? flight.payload.cargoName() : "";
             CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> owner),
-                    new XaeroMarkerPacket(true, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z));
+                    new XaeroMarkerPacket(true, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z,
+                            markerLabel));
         }
         notifyOwner(owner, at, reason, summary);
         end(flight);
@@ -260,7 +263,7 @@ public final class ShellManager {
             return false;
         }
         CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new XaeroMarkerPacket(false, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z));
+                new XaeroMarkerPacket(false, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z, ""));
         return true;
     }
 

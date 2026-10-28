@@ -12,6 +12,7 @@ import net.minecraftforge.network.NetworkEvent;
  * 客户端 → 服务端：调角度/装药，或开火。
  *
  * <p>所有校验都在服务端做（距离、冷却、火药数量），客户端只发「意图」。</p>
+ * <p>{@code chargeDelta} 与装药字段同单位（十分之一份）：键盘一次 ±10 就是 ±1.0 份。</p>
  */
 public record CannonControlPacket(BlockPos pos, int pitchDelta, int yawDelta, int chargeDelta, boolean fire) {
 

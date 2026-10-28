@@ -63,9 +63,26 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
+    // 只让 JUnit 相关的包走镜像源。
+    // 不加 content 过滤的话，ForgeGradle 的编译配置会顺带去镜像重试 Minecraft 的库（netty 等），
+    // 平白多一轮下载。直连 repo.maven.apache.org 在这台机器上 JVM 的 TLS 握手过不去，所以用阿里云镜像。
+    maven {
+        url 'https://maven.aliyun.com/repository/public'
+        content {
+            includeGroupByRegex 'org\\.junit.*'
+            includeGroupByRegex 'org\\.opentest4j.*'
+            includeGroupByRegex 'org\\.apiguardian.*'
+        }
+    }
     // libs/ 下放置的联动模组 jar 通过 flatDir 解析：
     // "local:waystones:14.1.21" -> libs/waystones-14.1.21.jar
     flatDir { dir 'libs' }
+}
+
+configurations {
+    // 只给测试运行用的 JUnit classpath。刻意不继承 testImplementation（那会把 Minecraft 一起拖进来），
+    // 理由见下面 test 任务里的注释。
+    junitRuntime
 }
 
 dependencies {
@@ -77,10 +94,37 @@ dependencies {
     compileOnly fg.deobf("local:balm:${balm_version}")
     runtimeOnly fg.deobf("local:waystones:${waystones_version}")
     runtimeOnly fg.deobf("local:balm:${balm_version}")
+
+    // 纯逻辑单元测试（装药规则、输入解析、语言文件键对齐）。
+    // 这些测试刻意不碰 Minecraft 类型，所以不需要启动游戏或 GameTest 环境。
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    junitRuntime 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+
+    // 只给测试一条最小 classpath（自己的输出 + 语言键测试要读的 main 资源 + JUnit）。
+    //
+    // 为什么不用默认的 testRuntimeClasspath：它带着整条 Forge/Minecraft 开发依赖，长度十几 KB。
+    // Windows 下 Gradle 会因此改用 @argfile 传 classpath，而 argfile 按 UTF-8 写、
+    // java.exe 按系统代码页（GBK）读，项目路径里的中文就被啃成乱码，
+    // 测试类会直接 ClassNotFoundException——看起来像测试没编译，其实是路径没传进去。
+    // 单元测试本来也不需要 Minecraft，这条最小 classpath 短到不会触发 argfile。
+    classpath = files(sourceSets.test.output, sourceSets.main.output) + configurations.junitRuntime
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+    }
 }
 
 // 把 gradle.properties 里的占位符写进 mods.toml / pack.mcmeta
 tasks.named('processResources', ProcessResources).configure {
+    // Gradle 守护进程用的是平台默认字符集（见 gradle.properties 的说明），
+    // 资源过滤必须显式钉成 UTF-8，否则以后往 mods.toml 里加中文会被写坏。
+    filteringCharset = 'UTF-8'
+
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,

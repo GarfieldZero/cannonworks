@@ -17,7 +17,9 @@ import net.minecraftforge.items.SlotItemHandler;
  * 大炮的装填界面。
  *
  * <p>左侧两个槽：0 = 火药，1 = 负载。右侧是俯仰/方位/装药与开火按钮（在 {@code CannonScreen} 里）。</p>
- * <p>数值同步走 {@link ContainerData}：0 俯仰、1 方位、2 装药、3 冷却、4 射程、5 飞行 tick。</p>
+ * <p>数值同步走 {@link ContainerData}：0 俯仰、1 方位、2 装药、3 冷却、4 射程、5 飞行 tick、6 引信。</p>
+ * <p>装药（索引 2）的单位是<b>十分之一份</b>：80 = 8.0 份，滑条范围 0..{@link CannonBlockEntity#MAX_CHARGE}。
+ * 界面显示时自己除以 10 保留一位小数，别再在服务端这边换算。</p>
  */
 public class CannonMenu extends AbstractContainerMenu {
 

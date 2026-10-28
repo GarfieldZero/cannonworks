@@ -13,6 +13,9 @@ import net.minecraftforge.network.NetworkEvent;
  * 客户端 → 服务端：把俯仰/方位/装药/模式<b>直接设成某个值</b>（滑条与模式按钮用）。
  *
  * <p>和 {@link CannonControlPacket}（增量，键盘用）分开，避免滑条拖动时把增量叠加成灾难。</p>
+ *
+ * <p>单位约定：{@code charge} 是<b>十分之一份</b>的整数（80 = 8.0 份），不是火药个数；
+ * GUI 发送前用 {@code Math.round(chargeDouble * 10)} 换算，服务端 {@code setCharge} 直接收。</p>
  */
 public record CannonAimPacket(BlockPos pos, int pitch, int yaw, int charge, FireMode mode) {
 
