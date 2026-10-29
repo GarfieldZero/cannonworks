@@ -1,22 +1,22 @@
 package com.cannonworks.config;
 
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
  * 可调参数。改完保存后重进世界生效（COMMON 配置）。
  */
 public final class CannonConfig {
 
-    public static final ForgeConfigSpec SPEC;
+    public static final ModConfigSpec SPEC;
 
     /** 地图路径点回报间隔（tick）。默认 60 = 3 秒。 */
-    public static final ForgeConfigSpec.IntValue TRAIL_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue TRAIL_INTERVAL_TICKS;
 
     /** 同一条弹道最多保留几个路径点。 */
-    public static final ForgeConfigSpec.IntValue TRAIL_MAX_POINTS;
+    public static final ModConfigSpec.IntValue TRAIL_MAX_POINTS;
 
     static {
-        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
+        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         TRAIL_INTERVAL_TICKS = builder
                 .comment("Ticks between Xaero map trail markers (20 ticks = 1 second). Default 60 = 3s.")
                 .defineInRange("trailIntervalTicks", 60, 10, 600);

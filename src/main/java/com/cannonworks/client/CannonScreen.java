@@ -6,9 +6,10 @@ import com.cannonworks.block.CannonBlockEntity;
 import com.cannonworks.menu.CannonMenu;
 import com.cannonworks.network.CannonAimPacket;
 import com.cannonworks.network.CannonControlPacket;
-import com.cannonworks.network.CannonNetwork;
+import net.neoforged.neoforge.network.PacketDistributor;
 import com.cannonworks.network.CannonRenameCargoPacket;
 import com.cannonworks.payload.FireMode;
+import net.minecraft.core.component.DataComponents;
 import java.util.Locale;
 import java.util.function.IntConsumer;
 import net.minecraft.client.Minecraft;
@@ -219,7 +220,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         int yaw = (int) Math.round(Math.toDegrees(Math.atan2(-dx, dz)));
         yaw = Math.floorMod(yaw, 360);
 
-        CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(pos, pitch, yaw, charge, currentMode()));
+        PacketDistributor.sendToServer(new CannonAimPacket(pos, pitch, yaw, charge, currentMode()));
         pitchSlider.setLocal(pitch);
         yawSlider.setLocal(yaw);
         chargeSlider.setLocal(charge);
@@ -298,7 +299,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
             }
         }
         pendingChange = ChangeSource.NONE;
-        CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(
+        PacketDistributor.sendToServer(new CannonAimPacket(
                 menu.getBlockEntity().getBlockPos(),
                 pitchSlider.intValue(), yawSlider.intValue(), chargeSlider.intValue(), currentMode()));
         holdSync = 6;
@@ -315,7 +316,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
 
     private void toggleMode() {
         FireMode next = currentMode().next();
-        CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(
+        PacketDistributor.sendToServer(new CannonAimPacket(
                 menu.getBlockEntity().getBlockPos(),
                 pitchSlider.intValue(), yawSlider.intValue(), chargeSlider.intValue(), next));
         holdSync = 6;
@@ -327,7 +328,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         if (!readyToFire()) {
             return;
         }
-        CannonNetwork.CHANNEL.sendToServer(new CannonControlPacket(
+        PacketDistributor.sendToServer(new CannonControlPacket(
                 menu.getBlockEntity().getBlockPos(), 0, 0, 0, true));
         CannonShake.trigger(1.5f);
         holdSync = 6;
@@ -342,7 +343,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
      * <p>装药 delta 和字段同单位（十分之一份），所以按键那边乘过 10 再送进来。</p>
      */
     private void nudge(int pitchDelta, int yawDelta, int chargeDelta) {
-        CannonNetwork.CHANNEL.sendToServer(new CannonControlPacket(
+        PacketDistributor.sendToServer(new CannonControlPacket(
                 menu.getBlockEntity().getBlockPos(), pitchDelta, yawDelta, chargeDelta, false));
         pitchSlider.setLocal(pitchSlider.intValue() + pitchDelta);
         yawSlider.setLocal(Math.floorMod(yawSlider.intValue() + yawDelta, 360));
@@ -386,7 +387,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
                 slider.setLocal(slider.fromTyped(typed));
                 lockX = Integer.MIN_VALUE;
                 lockZ = Integer.MIN_VALUE;
-                CannonNetwork.CHANNEL.sendToServer(new CannonAimPacket(
+                PacketDistributor.sendToServer(new CannonAimPacket(
                         menu.getBlockEntity().getBlockPos(),
                         pitchSlider.intValue(), yawSlider.intValue(), chargeSlider.intValue(), currentMode()));
                 holdSync = 6;
@@ -584,7 +585,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         if (nameBox.isFocused()) {
             return;
         }
-        String current = cargo.hasCustomHoverName() ? cargo.getHoverName().getString() : "";
+        String current = cargo.has(DataComponents.CUSTOM_NAME) ? cargo.getHoverName().getString() : "";
         if (pendingName != null) {
             if (!current.equals(pendingName)) {
                 // 服务端还没把新名字同步回来，别用旧值把玩家刚提交的字盖掉
@@ -613,7 +614,7 @@ public class CannonScreen extends AbstractContainerScreen<CannonMenu> {
         nameBox.setFocused(false);
         setFocused(null);
         pendingName = typed;
-        CannonNetwork.CHANNEL.sendToServer(new CannonRenameCargoPacket(
+        PacketDistributor.sendToServer(new CannonRenameCargoPacket(
                 menu.getBlockEntity().getBlockPos(), typed));
     }
 

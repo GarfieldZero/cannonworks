@@ -1,9 +1,11 @@
 package com.cannonworks.network;
 
+import com.cannonworks.CannonWorks;
 import com.cannonworks.client.XaeroBridge;
-import java.util.function.Supplier;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
  * 服务端 -> 客户端：Xaero 地图标记。
@@ -14,10 +16,22 @@ import net.minecraftforge.network.NetworkEvent;
  *                 打传送石碑时会带货物名——否则地图上永远显示坐标名，
  *                 看起来就像「石碑命名没生效」。
  */
-public record XaeroMarkerPacket(boolean impact, int flightId, int x, int y, int z, String label) {
+public record XaeroMarkerPacket(boolean impact, int flightId, int x, int y, int z, String label)
+        implements CustomPacketPayload {
 
     /** 和石碑命名框同级的长度上限，别让地图上的名字撑爆。 */
     public static final int MAX_LABEL_LENGTH = 32;
+
+    public static final Type<XaeroMarkerPacket> TYPE =
+            new Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(CannonWorks.MOD_ID, "xaero_marker"));
+
+    public static final StreamCodec<FriendlyByteBuf, XaeroMarkerPacket> CODEC =
+            StreamCodec.of((buf, packet) -> packet.encode(buf), XaeroMarkerPacket::decode);
+
+    @Override
+    public Type<XaeroMarkerPacket> type() {
+        return TYPE;
+    }
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(impact);
@@ -33,15 +47,13 @@ public record XaeroMarkerPacket(boolean impact, int flightId, int x, int y, int 
                 buf.readVarInt(), buf.readUtf(MAX_LABEL_LENGTH));
     }
 
-    public void handle(Supplier<NetworkEvent.Context> supplier) {
-        NetworkEvent.Context context = supplier.get();
+    public static void handle(XaeroMarkerPacket packet, IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (impact) {
-                XaeroBridge.onImpact(flightId, x, y, z, label);
+            if (packet.impact()) {
+                XaeroBridge.onImpact(packet.flightId(), packet.x(), packet.y(), packet.z(), packet.label());
             } else {
-                XaeroBridge.onTrail(flightId, x, y, z);
+                XaeroBridge.onTrail(packet.flightId(), packet.x(), packet.y(), packet.z());
             }
         });
-        context.setPacketHandled(true);
     }
 }

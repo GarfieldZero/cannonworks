@@ -2,7 +2,6 @@ package com.cannonworks.entity;
 
 import com.cannonworks.CannonWorks;
 import com.cannonworks.ballistics.Trajectory;
-import com.cannonworks.network.CannonNetwork;
 import com.cannonworks.network.XaeroMarkerPacket;
 import com.cannonworks.payload.CannonPayload;
 import com.cannonworks.payload.FireMode;
@@ -23,14 +22,14 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.network.PacketDistributor;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * 炮弹的权威飞行管理器。
@@ -66,8 +65,8 @@ public final class ShellManager {
     }
 
     public static void init() {
-        MinecraftForge.EVENT_BUS.addListener(ShellManager::onServerTick);
-        MinecraftForge.EVENT_BUS.addListener(ShellManager::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(ShellManager::onServerTick);
+        NeoForge.EVENT_BUS.addListener(ShellManager::onServerStopped);
     }
 
     /** 发射一发炮弹，返回飞行 id；之后完全由本管理器驱动，调用方不需要再管实体。 */
@@ -104,10 +103,7 @@ public final class ShellManager {
         return List.copyOf(FLIGHTS.values());
     }
 
-    private static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
+    private static void onServerTick(ServerTickEvent.Post event) {
         releaseExpiredForcedAreas(event.getServer());
         if (FLIGHTS.isEmpty()) {
             return;
@@ -246,7 +242,7 @@ public final class ShellManager {
         if (owner != null) {
             // 打石碑时地图标记直接用石碑名字（没自定义名就留空，客户端回退到「落点 x, z」）
             String markerLabel = flight.payload.cargoName() != null ? flight.payload.cargoName() : "";
-            CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> owner),
+            PacketDistributor.sendToPlayer(owner,
                     new XaeroMarkerPacket(true, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z,
                             markerLabel));
         }
@@ -262,7 +258,7 @@ public final class ShellManager {
         if (player == null) {
             return false;
         }
-        CannonNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+        PacketDistributor.sendToPlayer(player,
                 new XaeroMarkerPacket(false, flight.id.hashCode(), (int) at.x, (int) at.y, (int) at.z, ""));
         return true;
     }

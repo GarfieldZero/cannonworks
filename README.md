@@ -9,6 +9,12 @@ Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑�
 >
 > **2026-10-28 更新：** 碰撞改为按炮台 yaw 动态裁切的旋转形状（5×5×2 查询网格），解决“转到侧面就穿模 / 空心处空气墙”；底部石碑命名框改成无边框内嵌样式。模型仍为 4×2.5 底座 + 6 格炮管。详见 [`docs/cannon-v3-implementation.md`](docs/cannon-v3-implementation.md)。
 
+> **本分支 `1.21.1-neoforge`：** Minecraft **1.21.1 / NeoForge 21.1 / Java 21** 适配版（v0.2.0）。
+> 1.20.1 / Forge 47 的主线仍在 `main` 分支，两个版本各自构建、不共用 jar。
+> 移植清单、构建方法（JDK 21、`libs-1.21.1/`、GBK 编码坑）与验证记录见
+> [`docs/port-1.21.1-neoforge.md`](docs/port-1.21.1-neoforge.md)。
+> 下面 1.20.1 的说明保留作对照；本分支的构建配置以 `build.gradle`/`gradle.properties` 为准。
+
 ## 怎么打一炮
 
 > **生存模式**：工作台 8 铁锭 + 1 火药合成（拿到材料后配方书自动解锁）；

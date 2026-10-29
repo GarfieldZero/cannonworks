@@ -1,10 +1,10 @@
 package com.cannonworks.block;
 
 import com.cannonworks.registry.ModBlockEntities;
+import com.mojang.serialization.MapCodec;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -25,13 +25,15 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.minecraftforge.network.NetworkHooks;
 
 /**
  * 大炮本体：一个方块承载整台炮，模型由 {@code CannonRenderer} 在外侧画出（含可俯仰的炮管）。
  * 右击打开装填界面。
  */
 public class CannonBlock extends BaseEntityBlock {
+
+    /** 1.20.5+ 方块必须提供 codec（数据生成/调试用）。 */
+    public static final MapCodec<CannonBlock> CODEC = simpleCodec(CannonBlock::new);
 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     /** 控制器本体的碰撞；底座其余部分由不可见占位块承担。 */
@@ -40,6 +42,11 @@ public class CannonBlock extends BaseEntityBlock {
     public CannonBlock(Properties properties) {
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
+    }
+
+    @Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
     }
 
     @Override
@@ -104,13 +111,14 @@ public class CannonBlock extends BaseEntityBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
-                                 BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
+                                               BlockHitResult hit) {
         if (!level.isClientSide && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             CannonMultiblock.place((net.minecraft.server.level.ServerLevel) level, pos);
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof CannonBlockEntity cannon) {
-                NetworkHooks.openScreen(serverPlayer, cannon, pos);
+                // 1.21.1：NetworkHooks 没了，用原版 openMenu + 额外数据写 BlockPos
+                serverPlayer.openMenu(cannon, buffer -> buffer.writeBlockPos(pos));
             }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);

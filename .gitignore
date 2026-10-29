@@ -37,3 +37,8 @@ docs/agent-bus/
 
 # Files from Forge MDK
 forge*changelog.txt
+
+# 1.21.1 NeoForge 分支的本地依赖与运行目录
+libs-1.21.1/
+run-1.21.1/
+run-1.21.1-client/

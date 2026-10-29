@@ -12,10 +12,11 @@ import com.cannonworks.registry.ModBlockEntities;
 import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
@@ -35,7 +36,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.items.ItemStackHandler;
+import net.neoforged.neoforge.items.ItemStackHandler;
 
 /**
  * 大炮的装填与射击逻辑。
@@ -297,7 +298,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         BlockState cargoState = null;
         if (isWaystoneItem(cargoStack)) {
             cargo = CannonPayload.Cargo.WAYSTONE;
-            cargoName = cargoStack.hasCustomHoverName() ? cargoStack.getHoverName().getString() : null;
+            cargoName = cargoStack.has(DataComponents.CUSTOM_NAME) ? cargoStack.getHoverName().getString() : null;
             if (cargoStack.getItem() instanceof BlockItem blockItem) {
                 cargoState = blockItem.getBlock().defaultBlockState();
             }
@@ -355,9 +356,9 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         // 全是空格的名字在落点石碑列表里就是一个看不见的空条目，很难排查。
         String trimmed = name == null ? "" : name.trim();
         if (trimmed.isEmpty()) {
-            stack.resetHoverName();
+            stack.remove(DataComponents.CUSTOM_NAME);
         } else {
-            stack.setHoverName(Component.literal(trimmed));
+            stack.set(DataComponents.CUSTOM_NAME, Component.literal(trimmed));
         }
         setChanged();
         return true;
@@ -389,19 +390,12 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
         }
     }
 
-    // ---- 渲染范围（炮管会伸出方块外） ----
-
-    @Override
-    public net.minecraft.world.phys.AABB getRenderBoundingBox() {
-        return new net.minecraft.world.phys.AABB(worldPosition).inflate(10.0);
-    }
-
     // ---- 存档 ----
 
     @Override
-    protected void saveAdditional(CompoundTag tag) {
-        super.saveAdditional(tag);
-        tag.put("Inventory", inventory.serializeNBT());
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+        tag.put("Inventory", inventory.serializeNBT(registries));
         tag.putInt("Pitch", pitch);
         tag.putInt("Yaw", yaw);
         tag.putInt("Charge", charge);
@@ -413,14 +407,14 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
+    public void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
         if (tag.contains("Inventory")) {
             // 旧存档只有 2 个槽，ItemStackHandler.deserializeNBT 会按 NBT 里的 Size 改槽位数，
             // 导致新界面的第 3 个槽越界崩溃。这里强制按当前槽位数反序列化（物品按索引保留）。
             CompoundTag inv = tag.getCompound("Inventory").copy();
             inv.putInt("Size", inventory.getSlots());
-            inventory.deserializeNBT(inv);
+            inventory.deserializeNBT(registries, inv);
         }
         pitch = tag.contains("Pitch") ? tag.getInt("Pitch") : pitch;
         yaw = tag.contains("Yaw") ? tag.getInt("Yaw") : yaw;
@@ -441,7 +435,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     // ---- 同步给客户端（渲染炮管角度） ----
 
     @Override
-    public CompoundTag getUpdateTag() {
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         tag.putInt("Pitch", pitch);
         tag.putInt("Yaw", yaw);
@@ -450,7 +444,7 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     @Override
-    public void handleUpdateTag(CompoundTag tag) {
+    public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
         pitch = tag.getInt("Pitch");
         yaw = tag.getInt("Yaw");
         fireGameTime = tag.contains("FireGameTime") ? tag.getLong("FireGameTime") : -1L;
@@ -460,13 +454,6 @@ public class CannonBlockEntity extends BlockEntity implements MenuProvider {
     @Override
     public net.minecraft.network.protocol.Packet<net.minecraft.network.protocol.game.ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
-    }
-
-    @Override
-    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket packet) {
-        if (packet.getTag() != null) {
-            handleUpdateTag(packet.getTag());
-        }
     }
 
     // ---- 菜单 ----

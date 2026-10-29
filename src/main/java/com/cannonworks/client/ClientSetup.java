@@ -4,14 +4,13 @@ import com.cannonworks.CannonWorks;
 import com.cannonworks.registry.ModBlockEntities;
 import com.cannonworks.registry.ModEntities;
 import com.cannonworks.registry.ModMenus;
-import net.minecraft.client.gui.screens.MenuScreens;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.EntityRenderersEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
-@Mod.EventBusSubscriber(modid = CannonWorks.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@EventBusSubscriber(modid = CannonWorks.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ClientSetup {
 
     private ClientSetup() {
@@ -29,8 +28,9 @@ public final class ClientSetup {
         event.registerLayerDefinition(CannonShellModel.LAYER, CannonShellModel::createBodyLayer);
     }
 
+    /** 1.21.1 用 RegisterMenuScreensEvent，不再在 FMLClientSetupEvent 里手动 register。 */
     @SubscribeEvent
-    public static void registerScreens(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> MenuScreens.register(ModMenus.CANNON.get(), CannonScreen::new));
+    public static void registerScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenus.CANNON.get(), CannonScreen::new);
     }
 }

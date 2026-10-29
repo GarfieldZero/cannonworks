@@ -1,0 +1,33 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="${mod_authors}"
+credits="GarfieldZero and Whale Maid (AI assistant)"
+description='''${mod_description}'''
+
+[[dependencies.${mod_id}]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.0,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+# Waystones 是软依赖：没装也能加载，只影响石碑空投功能
+[[dependencies.${mod_id}]]
+modId="waystones"
+type="optional"
+versionRange="[21.1.0,)"
+ordering="AFTER"
+side="BOTH"

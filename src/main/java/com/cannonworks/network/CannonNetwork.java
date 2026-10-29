@@ -1,50 +1,34 @@
 package com.cannonworks.network;
 
 import com.cannonworks.CannonWorks;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.network.NetworkDirection;
-import net.minecraftforge.network.NetworkRegistry;
-import net.minecraftforge.network.simple.SimpleChannel;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
+/**
+ * 网络包注册（NeoForge 1.21.1 的 payload 制）。
+ *
+ * <p>版本号仍然保留：客户端/服务端协议不一致时，NeoForge 会在握手阶段直接拒绝，
+ * 比进入游戏后包表错位好查得多。</p>
+ */
 public final class CannonNetwork {
 
     /**
      * 协议版本：加了「石碑改名」包（2）、给 Xaero 落点包加了名字字段（3），都要 +1。
-     * 不 +1 的话旧客户端连新服务端会在注册包表时错位，报的错跟真正原因八竿子打不着。
      */
-    private static final String PROTOCOL = "3";
-
-    public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
-            .named(ResourceLocation.fromNamespaceAndPath(CannonWorks.MOD_ID, "main"))
-            .networkProtocolVersion(() -> PROTOCOL)
-            .clientAcceptedVersions(PROTOCOL::equals)
-            .serverAcceptedVersions(PROTOCOL::equals)
-            .simpleChannel();
+    public static final String PROTOCOL = "3";
 
     private CannonNetwork() {
     }
 
-    public static void register() {
-        int id = 0;
-        CHANNEL.messageBuilder(CannonControlPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
-                .encoder(CannonControlPacket::encode)
-                .decoder(CannonControlPacket::decode)
-                .consumerMainThread(CannonControlPacket::handle)
-                .add();
-        CHANNEL.messageBuilder(CannonAimPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
-                .encoder(CannonAimPacket::encode)
-                .decoder(CannonAimPacket::decode)
-                .consumerMainThread(CannonAimPacket::handle)
-                .add();
-        CHANNEL.messageBuilder(CannonRenameCargoPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
-                .encoder(CannonRenameCargoPacket::encode)
-                .decoder(CannonRenameCargoPacket::decode)
-                .consumerMainThread(CannonRenameCargoPacket::handle)
-                .add();
-        CHANNEL.messageBuilder(XaeroMarkerPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
-                .encoder(XaeroMarkerPacket::encode)
-                .decoder(XaeroMarkerPacket::decode)
-                .consumerMainThread(XaeroMarkerPacket::handle)
-                .add();
+    public static void register(RegisterPayloadHandlersEvent event) {
+        PayloadRegistrar registrar = event.registrar(PROTOCOL);
+        registrar.playToServer(CannonControlPacket.TYPE, CannonControlPacket.CODEC,
+                CannonControlPacket::handle);
+        registrar.playToServer(CannonAimPacket.TYPE, CannonAimPacket.CODEC,
+                CannonAimPacket::handle);
+        registrar.playToServer(CannonRenameCargoPacket.TYPE, CannonRenameCargoPacket.CODEC,
+                CannonRenameCargoPacket::handle);
+        registrar.playToClient(XaeroMarkerPacket.TYPE, XaeroMarkerPacket.CODEC,
+                XaeroMarkerPacket::handle);
     }
 }

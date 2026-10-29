@@ -84,9 +84,9 @@ public class CannonShellEntity extends Entity {
     }
 
     @Override
-    protected void defineSynchedData() {
-        entityData.define(DATA_YAW, 0.0f);
-        entityData.define(DATA_PITCH, 0.0f);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(DATA_YAW, 0.0f);
+        builder.define(DATA_PITCH, 0.0f);
     }
 
     @Override

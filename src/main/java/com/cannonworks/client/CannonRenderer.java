@@ -18,6 +18,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /** 把方块实体里的俯仰/方位角画成一台会转、会后坐、会喷火的炮。 */
@@ -35,6 +36,12 @@ public class CannonRenderer implements BlockEntityRenderer<CannonBlockEntity> {
         ModelPart root = context.bakeLayer(CannonModel.LAYER);
         this.base = root.getChild("base");
         this.barrel = root.getChild("barrel");
+    }
+
+    /** 炮管会伸出方块外，渲染包围盒要放大，否则玩家离远了模型会被裁掉。 */
+    @Override
+    public AABB getRenderBoundingBox(CannonBlockEntity blockEntity) {
+        return new AABB(blockEntity.getBlockPos()).inflate(10.0);
     }
 
     @Override

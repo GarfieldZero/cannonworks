@@ -3,10 +3,10 @@ package com.cannonworks.client;
 import com.cannonworks.CannonWorks;
 import net.minecraft.Util;
 import net.minecraft.util.Mth;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.ViewportEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ViewportEvent;
 
 /**
  * 重炮开火时的短促屏幕震动。
@@ -14,7 +14,7 @@ import net.minecraftforge.fml.common.Mod;
  * <p>只影响相机角度，不改玩家朝向；强度按距离衰减，持续时间约 650ms。
  * 由客户端渲染器在收到 BE 的 {@code fireGameTime} 后触发。</p>
  */
-@Mod.EventBusSubscriber(modid = CannonWorks.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
+@EventBusSubscriber(modid = CannonWorks.MOD_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
 public final class CannonShake {
 
     private static final long DURATION_MS = 650L;

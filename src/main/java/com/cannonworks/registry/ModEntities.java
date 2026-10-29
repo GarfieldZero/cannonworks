@@ -2,19 +2,19 @@ package com.cannonworks.registry;
 
 import com.cannonworks.CannonWorks;
 import com.cannonworks.entity.CannonShellEntity;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModEntities {
 
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
-            DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, CannonWorks.MOD_ID);
+            DeferredRegister.create(Registries.ENTITY_TYPE, CannonWorks.MOD_ID);
 
-    public static final RegistryObject<EntityType<CannonShellEntity>> CANNON_SHELL =
+    public static final DeferredHolder<EntityType<?>, EntityType<CannonShellEntity>> CANNON_SHELL =
             ENTITY_TYPES.register("cannon_shell", () -> EntityType.Builder
                     .<CannonShellEntity>of(CannonShellEntity::new, MobCategory.MISC)
                     .sized(0.6f, 0.6f)

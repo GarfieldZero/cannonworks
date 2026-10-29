@@ -36,10 +36,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 /**
  * 开发期调试命令。
@@ -53,7 +53,7 @@ import net.minecraftforge.fml.common.Mod;
  * /cannon block load|fire ...                                  给方块装填/开火（无头测试）
  * </pre>
  */
-@Mod.EventBusSubscriber(modid = CannonWorks.MOD_ID)
+@EventBusSubscriber(modid = CannonWorks.MOD_ID)
 public final class CannonCommand {
     private CannonCommand() {
     }
@@ -199,7 +199,7 @@ public final class CannonCommand {
         net.minecraft.world.phys.BlockHitResult hit = context.getSource().getLevel().clip(
                 new net.minecraft.world.level.ClipContext(from, to,
                         net.minecraft.world.level.ClipContext.Block.COLLIDER,
-                        net.minecraft.world.level.ClipContext.Fluid.NONE, null));
+                        net.minecraft.world.level.ClipContext.Fluid.NONE, net.minecraft.world.phys.shapes.CollisionContext.empty()));
         context.getSource().sendSuccess(() -> Component.literal(
                 "clip=" + hit.getType() + " @ " + hit.getBlockPos().toShortString() + " loc=" + hit.getLocation()), false);
         return 1;
@@ -225,7 +225,11 @@ public final class CannonCommand {
                 // greedyString 会把引号原样吞进去，传不了空串，清空只好单开一个子命令
                 .then(Commands.literal("clearname")
                         .then(Commands.argument("pos", BlockPosArgument.blockPos())
-                                .executes(CannonCommand::blockClearName)));
+                                .executes(CannonCommand::blockClearName)))
+                // 开发/无头验收用：把界面直接推给执行命令的玩家，等价于右击
+                .then(Commands.literal("open")
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                .executes(CannonCommand::blockOpen)));
     }
 
     /** 无头验收用：清掉石碑的自定义名字，等价于界面命名框里删空再回车。 */
@@ -261,6 +265,22 @@ public final class CannonCommand {
             return 0;
         }
         source.sendSuccess(() -> Component.literal("已命名为「" + name + "」"), false);
+        return 1;
+    }
+
+    /** 开发/无头验收用：把大炮界面直接开给执行命令的玩家（等价于右击，省得自动化点击）。 */
+    private static int blockOpen(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        if (!(source.getLevel().getBlockEntity(pos) instanceof CannonBlockEntity cannon)) {
+            source.sendFailure(Component.literal("那里不是大炮"));
+            return 0;
+        }
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            source.sendFailure(Component.literal("这条命令需要玩家执行"));
+            return 0;
+        }
+        player.openMenu(cannon, buffer -> buffer.writeBlockPos(pos));
         return 1;
     }
 

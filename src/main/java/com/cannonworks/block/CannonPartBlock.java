@@ -1,9 +1,9 @@
 package com.cannonworks.block;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
@@ -15,7 +15,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.minecraftforge.network.NetworkHooks;
 
 /**
  * 大炮底座的不可见占位块。
@@ -26,8 +25,15 @@ import net.minecraftforge.network.NetworkHooks;
  */
 public class CannonPartBlock extends Block {
 
+    public static final MapCodec<CannonPartBlock> CODEC = simpleCodec(CannonPartBlock::new);
+
     public CannonPartBlock(Properties properties) {
         super(properties);
+    }
+
+    @Override
+    protected MapCodec<? extends Block> codec() {
+        return CODEC;
     }
 
     @Override
@@ -57,12 +63,12 @@ public class CannonPartBlock extends Block {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
-                                 BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
+                                               BlockHitResult hit) {
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
             BlockPos master = CannonMultiblock.findMaster(level, pos);
             if (master != null && level.getBlockEntity(master) instanceof CannonBlockEntity cannon) {
-                NetworkHooks.openScreen(serverPlayer, cannon, master);
+                serverPlayer.openMenu(cannon, buffer -> buffer.writeBlockPos(master));
                 return InteractionResult.CONSUME;
             }
         }
