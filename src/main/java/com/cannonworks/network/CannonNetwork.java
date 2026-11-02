@@ -9,10 +9,12 @@ import net.minecraftforge.network.simple.SimpleChannel;
 public final class CannonNetwork {
 
     /**
-     * 协议版本：加了「石碑改名」包（2）、给 Xaero 落点包加了名字字段（3），都要 +1。
-     * 不 +1 的话旧客户端连新服务端会在注册包表时错位，报的错跟真正原因八竿子打不着。
+     * 协议版本：加了「石碑改名」包（2）、给 Xaero 落点包加了名字字段（3）、
+     * 开火模式多了「穿甲」这一档（4），都要 +1。
+     * 不 +1 的话旧客户端连新服务端会在注册包表时错位，或者旧客户端把穿甲包成空爆，
+     * 报的错跟真正原因八竿子打不着。
      */
-    private static final String PROTOCOL = "3";
+    private static final String PROTOCOL = "4";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(ResourceLocation.fromNamespaceAndPath(CannonWorks.MOD_ID, "main"))

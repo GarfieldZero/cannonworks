@@ -1,7 +1,7 @@
 package com.cannonworks.payload;
 
 /**
- * 开火模式：决定落点要不要先炸出弹坑。
+ * 开火模式：决定落点要不要先炸出弹坑，以及飞行中要不要钻地形。
  *
  * <p>界面显示走 {@link #translationKey()}（客户端按玩家语言渲染）；
  * {@link #label()} 保留给服务端日志和命令反馈——那里没有「玩家语言」这回事，
@@ -11,7 +11,12 @@ public enum FireMode {
     /** 接触：炸坑 → 填充方块 → 货物生效。 */
     CONTACT("接触", "gui.cannonworks.cannon.fuse.contact"),
     /** 空爆：不炸坑 → 填充方块 → 货物生效。 */
-    AIRBURST("空爆", "gui.cannonworks.cannon.fuse.airburst");
+    AIRBURST("空爆", "gui.cannonworks.cannon.fuse.airburst"),
+    /**
+     * 穿甲：飞行中钻透黑曜石及以下硬度的方块；撞基岩会跳弹；
+     * 停下来的地方不再炸坑，直接铺填充/放货物。
+     */
+    PIERCING("穿甲", "gui.cannonworks.cannon.fuse.piercing");
 
     private final String label;
     private final String translationKey;
@@ -32,10 +37,20 @@ public enum FireMode {
     }
 
     public FireMode next() {
-        return this == CONTACT ? AIRBURST : CONTACT;
+        return switch (this) {
+            case CONTACT -> AIRBURST;
+            case AIRBURST -> PIERCING;
+            case PIERCING -> CONTACT;
+        };
     }
 
     public static FireMode byName(String name) {
-        return "airburst".equalsIgnoreCase(name) ? AIRBURST : CONTACT;
+        if ("airburst".equalsIgnoreCase(name)) {
+            return AIRBURST;
+        }
+        if ("piercing".equalsIgnoreCase(name)) {
+            return PIERCING;
+        }
+        return CONTACT;
     }
 }

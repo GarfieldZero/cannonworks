@@ -63,8 +63,8 @@ public final class PayloadDelivery {
     private static int placeFiller(ServerLevel level, Vec3 hit, Vec3 incoming, CannonPayload payload,
                                    FireMode mode) {
         double radius = CRATER_RADIUS + 1.5;
-        if (mode == FireMode.AIRBURST) {
-            // 空爆就在命中点原地长——打墙面就贴在墙面，不再投影到墙脚。
+        if (mode != FireMode.CONTACT) {
+            // 空爆和穿甲都没有弹坑，就在命中点原地长——打墙面就贴在墙面，不再投影到墙脚。
             // 如果命中点附近是纯空气（没有可依附的面），才退回地面投影。
             int placed = ImpactEffects.placeBlob(level, hit, payload.fillerState(), payload.fillerCount(), radius);
             if (placed == 0) {

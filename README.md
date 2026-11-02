@@ -9,6 +9,8 @@ Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑�
 >
 > **2026-10-28 更新：** 碰撞改为按炮台 yaw 动态裁切的旋转形状（5×5×2 查询网格），解决“转到侧面就穿模 / 空心处空气墙”；底部石碑命名框改成无边框内嵌样式。模型仍为 4×2.5 底座 + 6 格炮管。详见 [`docs/cannon-v3-implementation.md`](docs/cannon-v3-implementation.md)。
 
+> **2026-11-02 更新（v0.1.1）：** 新增**穿甲模式**（引信第三档）：钻透黑曜石及以下硬度的方块，撞基岩会跳弹（打水漂，最多 3 次），箱子/刷怪笼直接炸掉并掉落内容物；普通模式/空爆不受影响。配置见 `config/cannonworks-common.toml` 的 `[armorPiercing]` 段；网络协议升到 **4**。详见 [`docs/armor-piercing.md`](docs/armor-piercing.md)。
+
 > **1.21.1 / NeoForge 版本：** 已在分支 [`1.21.1-neoforge`](https://github.com/GarfieldZero/cannonworks/tree/1.21.1-neoforge) 完成移植，
 > Release [`v0.2.0`](https://github.com/GarfieldZero/cannonworks/releases/tag/v0.2.0) 提供 `cannonworks-0.2.0.jar`
 > （Minecraft **1.21.1** / NeoForge **21.1.x** / Java **21**，Waystones 21.1.x 可选联动）。
@@ -32,6 +34,7 @@ Minecraft **1.20.1 / Forge 47.4.1** 的大炮主题模组，与「传送石碑�
 4. 瞄准：**滑条**大范围拖（装药显示到 0.1 份），**↑↓ ←→** 微调俯仰/方位（每次 1°，Shift 5°），**PgUp/PgDn** 调装药（每次 1.0 份）。
    **想输精确值就点滑条右边的数值**，会在原地弹出输入框：Enter 提交、Esc 取消；装药可以打小数（如 `8.1`）。
    **货物槽放石碑时，最下面那行会变成命名框**，打完名字按 Enter 即可，不用再抱去铁砧。最后点「点火」。
+   **模式按钮（引信）现在有三档：接触 → 空爆 → 穿甲**。穿甲适合下界/穿山：低角度能直接钻透地狱岩、黑曜石；撞基岩会跳弹，最多 3 次后停在落点。钻掉的方块不掉落，箱子和刷怪笼会被炸掉（内容物掉落）。
 5. 炮弹飞 10 秒~4 分半，落地效果见上方表格。
 > 设计文档见 [`docs/design-v1.md`](docs/design-v1.md)。
 

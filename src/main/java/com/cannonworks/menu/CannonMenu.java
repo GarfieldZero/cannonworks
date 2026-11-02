@@ -58,7 +58,8 @@ public class CannonMenu extends AbstractContainerMenu {
                     case DATA_PITCH -> blockEntity.setPitch(value);
                     case DATA_YAW -> blockEntity.setYaw(value);
                     case DATA_CHARGE -> blockEntity.setCharge(value);
-                    case DATA_MODE -> blockEntity.setMode(FireMode.values()[Math.max(0, Math.min(1, value))]);
+                    case DATA_MODE -> blockEntity.setMode(
+                            FireMode.values()[Math.max(0, Math.min(FireMode.values().length - 1, value))]);
                     default -> {
                     }
                 }
